@@ -14,15 +14,17 @@ Analysis of BRC data to assess forest niches and associations with long-term tre
 - 11 script to look in more detail at moth results
 
 
-### Folders
+### Pushed Folders
 - plots 
 - inla (quick script to start a possible spatio-temporal model)
-
-### Analysis scripts not on github - instead on the CEH shared datalab
-- script to produce the time-series indicators using the results of Charlie Outhwaites occu-det models. These occu-det models are stored on the CEH object store, accessible from datalabs
-- a script to summarise the long-term trends of each species - also using the outputs Charlie' models
 
 ### Ignored folders
 - inputs - files containing the processed raw data ready for analysis
 - outputs - ignore for the moment - they are many and large
+
+### Analysis scripts not on github - instead on the CEH shared datalabs notebook
+- a script to produce the time-series indicators using the results of Charlie Outhwaites occu-det models. These occu-det models are stored on the CEH object store, accessible from datalabs
+- a script to summarise the long-term trends of each species - also using the outputs Charlie' models
+
+
 
