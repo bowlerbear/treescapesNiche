@@ -1,6 +1,6 @@
 #script to run occupancy models
 
-#takes outputs produced by the HPC_prepforestOccuModels
+#takes outputs produced by the occurrencedataPrep.R
 
 library(tidyverse)
 library(occuR, lib.loc = "/home/users/diabow/Rlibraries")
@@ -15,13 +15,14 @@ task.id = as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
 
 ### load objects ##########################################
 
-#location of data input and output
 taxa_data <- readRDS(paste(dataDir, "taxa_data.rds", sep="/"))
 visit_data <- readRDS(paste(dataDir, "visit_data.rds", sep="/"))
 occMatrix <- readRDS(paste(dataDir,"occMatrix.rds",sep="/"))
 commonSpecies <- readRDS(paste(dataDir,"commonSpecies.rds",sep="/"))
 
 ### species #############################################
+
+#choose taxa for this array task
 
 myspecies = as.character(commonSpecies[task.id])
 
