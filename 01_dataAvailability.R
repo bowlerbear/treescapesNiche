@@ -3,7 +3,9 @@ require(BRCmap)
 require(sf)
 require(tmap)
 
-### choose folder ######################################
+### choose data folder ######################################
+
+#folders that contain cleaned BRC records:
 
 # from Rob Boyd (should be versions of Charlies data)
 #dataDir <- "W:/PYWELL_SHARED/Pywell Projects/BRC/Rob Boyd/TSDA/SDMs/Data/BRCRecords"
@@ -19,7 +21,8 @@ dataDir <- "W:/PYWELL_SHARED/Pywell Projects/BRC/Charlie/1.c. New Model Rerun/1.
 allFiles <- list.files(dataDir) %>%
                 str_subset(".rdata")
 
-#read each one and get the names
+# read each one and get the names of the variables each data frame
+# to check whether they are all standardized
 lapply(allFiles, function(x){
   assign('newname', get(load(paste(dataDir,x,sep="/"))))
   print(x)
@@ -35,7 +38,7 @@ lapply(allFiles, function(x){
 #change "SQ_1KM" to "TO_GRIDREF"
 
 #from Charlie's folder: 
-# all look good
+# all look good - all have same column headings
 
 ### get all data #################################
 
@@ -74,7 +77,7 @@ allData$Decade <- floor_decade(allData$YEAR)
 
 ### space #######################################
 
-
+#get xy coordinates of the ordnance survey grids
 allGrids <- sort(unique(allData$TO_GRIDREF))
 
 coords <- OSgrid2GB_EN(gridref = allGrids) %>%
@@ -148,4 +151,4 @@ speciesSummary <- allData %>%
                     
 taxaSummary <- left_join(taxaSummary,speciesSummary)     
 
-write.table(taxaSummary, file="outputs/taxaSummary.txt",sep="\t",row.names=FALSE)
+write.table(taxaSummary, file="inputs/taxaSummary.txt",sep="\t",row.names=FALSE)
