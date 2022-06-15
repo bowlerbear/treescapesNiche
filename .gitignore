@@ -40,3 +40,6 @@ vignettes/*.pdf
 
 # Ignore report files from running stuff on the HPC
 hpc_reports/*
+
+# Ignore raw data files
+inputs/*
