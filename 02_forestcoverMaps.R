@@ -23,6 +23,8 @@ temp <- tempfile()
 utils::unzip(zipfile = ziplocation, 
       exdir = temp)
 
+#pick one of the following according to the selected year
+
 #2015
 filePath <-  paste0(temp, "/",
               tools ::file_path_sans_ext(list.files(paste0(yearPath, year))),
