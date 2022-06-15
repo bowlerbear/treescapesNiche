@@ -113,9 +113,11 @@ all(row.names(occMatrix) == visit_data$visit)
 
 ### save objects #########################################
 
-saveRDS(visit_data, file="outputs/visit_data.rds")
-saveRDS(taxa_data, file="outputs/taxa_data.rds")
-saveRDS(occMatrix, file="outputs/occMatrix.rds")
-saveRDS(commonSpecies, file="outputs/commonSpecies.rds")
+#these are all inputs for the models so save in the inputs folder
+
+saveRDS(visit_data, file="inputs/visit_data.rds")
+saveRDS(taxa_data, file="inputs/taxa_data.rds")
+saveRDS(occMatrix, file="inputs/occMatrix.rds")
+saveRDS(commonSpecies, file="inputs/commonSpecies.rds")
 
 ### end #################################################
