@@ -175,5 +175,4 @@ ggplot(allGams) +
   facet_wrap(~taxa, scales="free") +
   geom_abline(aes(intercept = 0, slope = 1, linetype = "dashed"))
 
-
 ### end ########################################################################
