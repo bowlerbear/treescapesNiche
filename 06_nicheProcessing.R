@@ -13,7 +13,7 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Bryophytes","Carabids","Centipede
 
 ### choose models ###########################
 
-modelFolder <- "outputs/HPC/broadleaf/run2"
+modelFolder <- "outputs/forestAssociations/broadleaf/run2"
 
 ### species per taxa ########################
 
