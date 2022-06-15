@@ -43,3 +43,6 @@ hpc_reports/*
 
 # Ignore raw data files
 inputs/*
+
+# Ignore large model outputs
+outputs/*
