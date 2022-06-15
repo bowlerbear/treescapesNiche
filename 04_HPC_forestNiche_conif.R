@@ -1,5 +1,7 @@
 #Script to analyse the BRC records and assess the effect of forest cover on species occurrence
 
+#this is for the coniferous analysis
+
 #Parameter needed:
 #mytaxa
 
@@ -38,12 +40,12 @@ dataDir <- "/gws/nopw/j04/ceh_generic/rboyd/inputs/species_data"
 
 inputDir <- "/home/users/diabow/ConnectedTreescapes/inputs"
 
-outputDir <- "/home/users/diabow/ConnectedTreescapes/outputs/conif"
+outputDir <- "/home/users/diabow/ConnectedTreescapes/outputs"
 
 ### choose taxa #####################################
 
 taxaFiles <- list.files(dataDir) %>%
-                str_subset("Cleaned")
+  str_subset("Cleaned")
 
 length(taxaFiles)
 
@@ -54,15 +56,15 @@ mytaxa <- taxaFiles[task.id]
 ### load data ########################################
 
 taxaFile <- list.files(dataDir)  %>%
-              str_subset("Cleaned") %>% 
-              str_subset(mytaxa)
+  str_subset("Cleaned") %>% 
+  str_subset(mytaxa)
 
-load(paste(dataDir, taxaFile,sep="/")) # check whethey they are rds files!!
+load(paste(dataDir, taxaFile,sep="/"))
 
 message('Data has been read in')
 message(paste('Taxa is:',mytaxa))
 
-###fix grid labels ####################################
+###standardize labels ################################
 
 if("SQ_1KM" %in% names(taxa_data)){
   
@@ -82,9 +84,11 @@ if(!("YEAR" %in% names(taxa_data))){
 
 ### subsample recs ####################################
 
+# we dont need tonnes of data to estimate forest preference, so cap to 10000 visits
+
 #by year
 taxa_data <- taxa_data %>%
-                filter(YEAR > 1989 & YEAR <2016) 
+  filter(YEAR > 1989 & YEAR <2016)  # this is the period of the forest cover data
 
 
 taxa_data$visit <- paste(taxa_data$TO_GRIDREF,taxa_data$TO_STARTDATE,sep="_")
@@ -92,19 +96,11 @@ taxa_data$visit <- paste(taxa_data$TO_GRIDREF,taxa_data$TO_STARTDATE,sep="_")
 nuVisits <- length(unique(taxa_data$visit))
 
 selectVisits <- sample(unique(taxa_data$visit), size = ifelse(nuVisits>10000,
-                                                      10000,
-                                                      nuVisits))
+                                                              10000,
+                                                              nuVisits))
 
 taxa_data <- taxa_data %>%
   filter(visit %in% selectVisits)
-
-# run 1
-# some of the data are enormous -much more than we
-# # need to assess forest cover
-# taxa_data <- taxa_data %>%
-#   sample_n(size = ifelse(length(TO_GRIDREF)>100000,
-#                          100000,
-#                          length(TO_GRIDREF)))
 
 ### coords ############################################
 
@@ -131,7 +127,7 @@ speciesSummary <- taxa_data %>%
   ungroup() %>%
   arrange(desc(nuRecs))
 
-#how many species do we have 500 records for
+#how many species do we have at least 50 records for
 commonSpecies <- speciesSummary %>%
   filter(nuRecs > 50) %>%
   pull(Species) %>%
@@ -152,8 +148,8 @@ message(paste('Number of species passing threshold:',length(commonSpecies)))
 #   theme_minimal() +
 #   facet_wrap(~Species, nrow=2)
 
-#exclude Scotland and northern island
-England <- raster::getData('GADM',country='GBR',level=1) %>%
+#exclude northern island
+GBR <- raster::getData('GADM',country='GBR',level=1) %>%
   st_as_sf() %>%
   filter(NAME_1 %in% c("England","Wales","Scotland")) %>%
   st_transform(crs = 27700) %>%
@@ -166,11 +162,13 @@ taxa_data_spatial <- taxa_data %>%
 
 #filter on non-spatial data
 taxa_data <- taxa_data %>%
-  filter(st_intersects(taxa_data_spatial, England, sparse = FALSE)[,1]) 
+  filter(st_intersects(taxa_data_spatial, GBR, sparse = FALSE)[,1]) 
 
 message(paste('Number of records passing filter:',nrow(taxa_data)))
 
 ### organize data into visits #######################
+
+# a visit is a set of records on a given date in a given grid
 
 visit_data <- taxa_data %>%
   group_by(visit, TO_GRIDREF, TO_STARTDATE, YEAR, X, Y) %>%
@@ -182,26 +180,31 @@ visit_data <- taxa_data %>%
   mutate(Date = as.Date(Date)) %>%
   mutate(yday = lubridate::yday(Date)) %>%
   mutate(yday2 = as.numeric(scale(yday^2))) %>%
-  mutate(yday = as.numeric(base::scale(yday))) 
+  mutate(yday = as.numeric(scale(yday))) 
 
 ### list length #####################################
 
+#number of species reported on a visit, as an indicator of effort
+#most records are of list length 1 and probably not a comprehensive survey
+
 visit_data$LL <- ifelse(visit_data$nuSpecies==1,"single",
                         ifelse(visit_data$nuSpecies %in% 2:3,"short","long"))
+
+table(visit_data$LL)
 
 ### subsample visits #################################
 
 #reduce sampling at sites with many visits in the same year
 
 (visitsPerYear <- visit_data %>%
-                  group_by(SiteID,Year) %>%
-                  summarise(nuVisits = length(visit)))
+   group_by(SiteID,Year) %>%
+   summarise(nuVisits = length(visit)))
 
 #cap at 5 visits per site and year
 visit_data <- visit_data %>%
-                group_by(SiteID, X, Y, Year) %>%
-                sample_n(size = ifelse(length(visit)>5,5,length(visit))) %>%
-                ungroup()
+  group_by(SiteID, X, Y, Year) %>%
+  sample_n(size = ifelse(length(visit)>5,5,length(visit))) %>%
+  ungroup()
 
 nrow(visit_data)
 
@@ -221,19 +224,19 @@ message(paste('Median number of sites visited per year:', median(table(visit_dat
 visit_data$forestYear<- ifelse(visit_data$Year %in% 1990:1995, 1990,
                                ifelse(visit_data$Year %in% 1995:2003, 2000,
                                       ifelse(visit_data$Year %in% 2004:2011, 2007,
-                                            2015)))
+                                             2015)))
 
 #get forest cover data
 grid1km <- readRDS(paste0(inputDir,"/grid1km_conifForest_allyears.rds")) %>%
-              pivot_longer(cols = contains("fc"), 
-                           names_to="forestYear", 
-                           values_to="conifForest") %>%
-              rename(SiteID = tile_name) %>%
-              mutate(forestYear = as.numeric(gsub("fc_","",forestYear)))
+  pivot_longer(cols = contains("fc"), 
+               names_to="forestYear", 
+               values_to="conifForest") %>%
+  rename(SiteID = tile_name) %>%
+  mutate(forestYear = as.numeric(gsub("fc_","",forestYear)))
 
 #merge with taxa data based on forest cover of ordnance survey grid
 visit_data <- inner_join(visit_data, grid1km, by=c("SiteID","forestYear")) %>%
-                  filter(!is.na(conifForest))
+  filter(!is.na(conifForest))
 
 #hist(visit_data$conifForest)
 
@@ -243,15 +246,17 @@ message('Forest cover sorted')
 
 #align data frames
 
+#visit data
 visit_data <- visit_data %>%
-                mutate(visitID = as.numeric(as.factor(visit_data$visit))) %>%
-                arrange(visitID)
+  mutate(visitID = as.numeric(as.factor(visit_data$visit))) %>%
+  arrange(visitID)
 
+#species per visit data
 taxa_data <- taxa_data %>%
-                filter(visit %in% visit_data$visit) %>%
-                mutate(visitID = as.numeric(as.factor(visit))) 
-                
+  filter(visit %in% visit_data$visit) %>%
+  mutate(visitID = as.numeric(as.factor(visit))) 
 
+#add on focal species of this array task
 occMatrix <- reshape2::acast(taxa_data, visitID ~ Species, value.var = "Species",
                              fun=function(x)length(x))
 
@@ -261,51 +266,6 @@ occMatrix[occMatrix > 1] <- 1
 #check things align
 all(row.names(occMatrix) == visit_data$visitID)
 
-### subsample ############################################
-
-#function to subsample the data in the functions below
-#c. 1000 presence locations
-#c. 10000 absence locations
-
-#uniform subset
-#subSample <- function(visit_data){
-#  
-#presence data
-# presData <- visit_data %>%
-#               filter(Species==1)
-# 
-# #all data - over a range of forest cover values
-# #take 100 in each forest cover bin
-# absData <- visit_data %>%
-#               mutate(conifForest_floor = floor(conifForest)) %>%
-#               group_by(conifForest_floor) %>%
-#               sample_n(size = ifelse(length(visit)>100,100,length(visit))) %>%
-#               ungroup() %>%
-#               filter(Species==0)
-#             
-# #combine
-# return(bind_rows(presData, absData))
-# 
-# }
-
-#random subset
-# subSample <- function(visit_data){
-# 
-#   #presence data - all of them
-#   presData <- visit_data %>%
-#     filter(Species==1)
-# 
-#   #all data - over a range of forest cover values
-#   #take 100 in each forest cover bin
-#   absData <- visit_data %>%
-#     sample_n(size = size = ifelse(length(visit)<5000,length(visit),5000)) %>%
-#     filter(Species==0)
-# 
-#   #combine
-#   return(bind_rows(presData, absData))
-# 
-# }
-
 ### basic glm #############################################
 
 # I call it glm because we asssume a linear effect of forest cover
@@ -313,24 +273,19 @@ all(row.names(occMatrix) == visit_data$visitID)
 
 #general function
 fitBasicGam <- function(myspecies){
-
+  
   #check all aligns and add in species
   all(row.names(occMatrix) == visit_data$visitID)
   visit_data$Species <- occMatrix[,myspecies]
-
-  #subsample?
-  #visit_dataS <- subSample(visit_data)
-  visit_dataS <- visit_data
-
-
+  
   #fit gam and pull out forest cover effect
   require(mgcv)
-  gam1 <- gam(Species ~ conifForest + yday + yday2 + s(X,Y) + Year,
+  gam1 <- gam(Species ~ conifForest + yday + yday2 + Year + LL + s(X,Y),
               family = "binomial",
-              data = visit_dataS)
-
+              data = visit_data)
+  
   summary(gam1)$p.table[2,]
-
+  
 }
 
 #apply function
@@ -349,35 +304,32 @@ message('Basic glm done')
 hist(visit_data$conifForest) #most of the data is
 
 fitGamNiche <- function(myspecies){
-
+  
   #check all aligns and add in species
   all(row.names(occMatrix) == visit_data$visitID)
   visit_data$Species <- occMatrix[,myspecies]
-
-  #subsample?
-  #visit_dataS <- subSample(visit_data)
-  visit_dataS <- visit_data
-
+  
   #fit gam and pull out forest cover effect
   require(mgcv)
-  gam1 <- gam(Species ~ s(conifForest,k=3) + yday + yday2 + s(X,Y) + Year,
+  gam1 <- gam(Species ~ s(conifForest,k=3) + yday + yday2 + Year + LL + s(X,Y),
               family = "binomial",
-              data = visit_dataS)
-
+              data = visit_data)
+  
   #predict the gam effect of forest cover
   newdata = data.frame(conifForest = seq(0,100,by=1),
                        yday = median(visit_data$yday),
                        yday2 = median(visit_data$yday2),
                        X = median(visit_data$X),
                        Y = median(visit_data$Y),
+                       LL = "long",
                        Year = median(visit_data$Year))
-
+  
   newdata$preds <- predict(gam1,newdata, type="response")
   newdata$preds_se <- predict(gam1,newdata, se.fit=TRUE, type="response")$se.fit
   newdata$Species <- myspecies
-
+  
   return(newdata)
-
+  
 }
 
 gamOutput <- commonSpecies %>%
@@ -390,24 +342,20 @@ message('Basic gam done')
 ### basic gamm4 ###########################################
 
 fitGammNiche <- function(myspecies){
-
+  
   #check all aligns and add in species
   all(row.names(occMatrix) == visit_data$visitID)
   visit_data$Species <- occMatrix[,myspecies]
-
-  #subsample
-  #visit_dataS <- subSample(visit_data)
-  visit_dataS <- visit_data
-
+  
   #fit gam and pull out forest cover effect
   require(gamm4)
   gamm1 <- gamm4(Species ~ conifForest + yday + yday2 + LL + s(X,Y),
                  family = "binomial",
                  random = ~ (1|Year),
-                 data = visit_dataS)
-
+                 data = visit_data)
+  
   summary(gamm1$gam)$p.table[2,]
-
+  
 }
 
 #apply function
@@ -417,7 +365,6 @@ gamOutput <- commonSpecies %>%
   arrange(desc(Estimate)) %>%
   janitor::clean_names()
 
-
 saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm4_subset_random_conif_",mytaxa,".rds"))
 
 message('Gamm done')
@@ -425,36 +372,33 @@ message('Gamm done')
 ### gamm niche ###########################################
 
 fitGammNiche <- function(myspecies){
-
+  
   #check all aligns and add in species
   all(row.names(occMatrix) == visit_data$visitID)
   visit_data$Species <- occMatrix[,myspecies]
-
-  #subsample
-  #visit_dataS <- subSample(visit_data)
-  visit_dataS <- visit_data
-
+  
   #fit gam and pull out forest cover effect
   require(gamm4)
   gamm1 <- gamm4(Species ~ s(conifForest, k=3) + yday + yday2 + LL + s(X,Y),
                  random = ~ (1|Year),
                  family = "binomial",
-                 data = visit_dataS)
-
+                 data = visit_data)
+  
   #predict the gam effect of forest cover
   newdata = data.frame(conifForest = seq(0,100,by=1),
                        yday = median(visit_data$yday),
                        yday2 = median(visit_data$yday2),
                        X = median(visit_data$X),
                        Y = median(visit_data$Y),
+                       LL = "long",
                        Year = median(visit_data$Year))
-
+  
   newdata$preds <- predict(gamm1,newdata, type="response") # check this bit
   newdata$preds_se <- predict(gamm1,newdata, se.fit=TRUE, type="response")$se.fit
   newdata$Species <- myspecies
-
+  
   return(newdata)
-
+  
 }
 
 gamOutput <- commonSpecies %>%
@@ -462,7 +406,6 @@ gamOutput <- commonSpecies %>%
   add_column(Species = commonSpecies) %>%
   arrange(desc(Estimate)) %>%
   janitor::clean_names()
-
 
 saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm4_shape_subset_random_conif_",mytaxa,".rds"))
 
