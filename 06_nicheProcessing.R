@@ -13,7 +13,9 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Bryophytes","Carabids","Centipede
 
 ### choose models ###########################
 
-modelFolder <- "outputs/forestAssociations/broadleaf/run2"
+modelFolder <- "outputs/forestAssociations/broadleaf"
+
+modelFolder <- "outputs/forestAssociations/conif"
 
 ### species per taxa ########################
 
@@ -29,19 +31,44 @@ list.files(modelFolder,full.names=TRUE) %>%
   summarise(nuSpecies = length(species)) %>%
   arrange(nuSpecies)
 
+### get models #############################
+
+#function to process a set of models
+
+getModels <- function(modelFolder,modeltype = "simple_linear"){ 
+  
+  #translate
+  if(modeltype=="simple_linear"){
+    fileName <- "gamOutput_glm_subset_random_"
+    
+  } else if(modeltype=="simple_shape"){
+    fileName <- "gamOutput_gam_shape_subset_random_"
+    
+  }else if(modeltype=="mixed_linear"){
+    fileName <- "gamOutput_gamm4_subset_random_"
+    
+  }else if(modeltype=="mixed_shape"){
+    fileName <- "gamOutput_gamm4_shape_subset_random_"
+  }
+  
+  list.files(modelFolder,full.names=TRUE) %>%
+    str_subset(fileName) %>%
+    set_names() %>%
+    map_dfr(readRDS, .id="source") %>%
+    group_by(source) %>%
+    mutate(Taxa = strsplit(source, fileName)[[1]][2]) %>%
+    mutate(Taxa = gsub("conif_","",Taxa)) %>%
+    mutate(Taxa = strsplit(Taxa,"_")[[1]][1])%>%
+    ungroup() %>%
+    filter(Taxa %in% selectTaxa) %>%
+    mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
+                          TRUE ~ as.character(Taxa)))  %>%
+    add_column(modeltype = modeltype)
+}
+
 ### linear associations #####################
 
-gamOutputs <- list.files(modelFolder,full.names=TRUE) %>%
-                str_subset("gamOutput_glm_subset_random_") %>%
-                set_names() %>%
-                map_dfr(readRDS, .id="source") %>%
-                group_by(source) %>%
-                mutate(Taxa = strsplit(source,"_")[[1]][5]) %>%
-                ungroup() %>%
-                filter(Taxa %in% selectTaxa) %>%
-                mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
-                          TRUE ~ as.character(Taxa)))  %>%
-                arrange(desc(estimate))
+gamOutputs <- getModels(modelFolder,modeltype = "simple_linear")
           
 #what taxa do we have?
 sort(unique(gamOutputs$Taxa))#all taxa
@@ -54,8 +81,6 @@ taxaSummary <- gamOutputs %>%
                 arrange(desc(medEffect))
 gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
 
-#### plotting #####
-
 gamOutputs %>%
   filter(estimate>(-0.1)) %>%
   ggplot() +
@@ -67,27 +92,17 @@ gamOutputs %>%
 
 ### gam shape ##########################################
 
-gamOutputs <- list.files(modelFolder,full.names=TRUE) %>%
-  str_subset("gamOutput_gam_shape_subset_random_") %>%
-  set_names() %>%
-  map_dfr(readRDS, .id="source") %>%
-  group_by(source) %>%
-  mutate(Taxa = strsplit(source,"_")[[1]][6]) %>%
-  ungroup() %>%
-  filter(Taxa %in% selectTaxa) %>%
-  mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
-                          TRUE ~ as.character(Taxa))) 
+gamOutputs <- getModels(modelFolder,modeltype = "simple_shape")
 
 #what taxa do we have?
 sort(unique(gamOutputs$Taxa))#all!!
-
-#### plotting #####
 
 speciesMax <- gamOutputs %>%
   group_by(Species) %>%
   summarise(maxPred = max(preds)) %>%
   ungroup()
 
+#for broad leaf
 gamOutputs %>%
 ggplot()+
   geom_line(aes(x=decidForest, y=preds, group=Species))+
@@ -95,19 +110,17 @@ ggplot()+
   xlab("Decid forest cover %") + ylab("Occupancy")+
   theme_classic()
 
+#for coniferous
+gamOutputs %>%
+  ggplot()+
+  geom_line(aes(x=conifForest, y=preds, group=Species))+
+  facet_wrap(~Taxa)+
+  xlab("Conif forest cover %") + ylab("Occupancy")+
+  theme_classic()
+
 ### linear association/gamm4 ##################################################
 
-gamOutputs <- list.files(modelFolder,full.names=TRUE) %>%
-  str_subset("gamOutput_gamm4_subset_random_") %>%
-  set_names() %>%
-  map_dfr(readRDS, .id="source") %>%
-  group_by(source) %>%
-  mutate(Taxa = strsplit(source,"_")[[1]][5]) %>%
-  ungroup() %>%
-  filter(Taxa %in% selectTaxa) %>%
-  mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
-                          TRUE ~ as.character(Taxa))) %>%
-  arrange(desc(estimate))
+gamOutputs <- getModels(modelFolder,modeltype = "mixed_linear")
 
 #what taxa do we have?
 sort(unique(gamOutputs$Taxa))
@@ -115,30 +128,52 @@ sort(unique(gamOutputs$Taxa))
 
 ### gam shape/gamm4 ###########################################################
 
-gamOutputs <- list.files(modelFolder,full.names=TRUE) %>%
-  str_subset("gamOutput_gamm4_shape_subset_random_") %>%
-  set_names() %>%
-  map_dfr(readRDS, .id="source") %>%
-  group_by(source) %>%
-  mutate(Taxa = strsplit(source,"_")[[1]][6]) %>%
-  ungroup() %>%
-  filter(Taxa %in% selectTaxa) %>%
-  mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
-                          TRUE ~ as.character(Taxa))) 
+gamOutputs <- getModels(modelFolder,modeltype = "simple_shape")
 
 #what taxa do we have?
 sort(unique(gamOutputs$Taxa))
 #missing moths 
 
-### compare subsets ############################################################
+### compare models #############################################################
+
+#compare model with and without year as a random effect
+gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
+                                  modeltype = "simple_linear") %>%
+                        add_column(forest = "broadleaf")
+
+gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
+                              modeltype = "simple_linear") %>%
+                        add_column(forest = "conif")
+
+allGams <- bind_rows(gamOutputs_broadleaf,gamOutputs_conif) %>%
+            select(forest, species, Taxa, modeltype, estimate, std_error) %>%
+            pivot_wider(everything(),
+                        names_from="forest", 
+                        values_from=c("estimate","std_error")) %>%
+            janitor::clean_names()
+
+ggplot(allGams) +
+  geom_point(aes(x = estimate_broadleaf, y = estimate_conif)) +
+  facet_wrap(~taxa, scales="free") +
+  geom_abline(aes(intercept = 0, slope = 1, linetype = "dashed"))
+
+### compare decid vs conif #####################################################
+
+#run script above twice
+gamOutputs_mixed <- getModels(modelFolder,modeltype = "mixed_linear")
+gamOutputs_simple <- getModels(modelFolder,modeltype = "simple_linear")
+
+allGams <- bind_rows(gamOutputs_mixed,gamOutputs_simple) %>%
+  select(species, Taxa, modeltype, estimate, std_error) %>%
+  pivot_wider(everything(),
+              names_from="modeltype", 
+              values_from=c("estimate","std_error")) %>%
+  janitor::clean_names()
+
+ggplot(allGams) +
+  geom_point(aes(x = estimate_mixed_linear, y = estimate_simple_linear)) +
+  facet_wrap(~taxa, scales="free") +
+  geom_abline(aes(intercept = 0, slope = 1, linetype = "dashed"))
 
 
 ### end ########################################################################
-
-#still missing moths
-
-#Error in pwrssUpdate(pp, resp, tol = tolPwrss, GQmat = GQmat, compDev = compDev,  : 
-#                       pwrssUpdate did not converge in (maxit) iterations
-#                     Calls: %>% ... <Anonymous> -> <Anonymous> -> stopifnot -> fn -> pwrssUpdate
-#                     Execution halted
-                     
