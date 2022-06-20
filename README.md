@@ -6,7 +6,7 @@ Analysis of BRC data to assess forest niches and associations with long-term tre
 - 02 process land cover maps to get % forest cover in available years
 - 03 process occurrence data so that they are in a format for further models
 - 04 scripts to assess the association between species occupancy and forest cover - run on HPC
-- 05 scripts to do 03 but in an occupancy model framework - not used at the moment, testing out a new package - run on HPC
+- 05 scripts to do 04 but in an occupancy model framework - not used at the moment, testing out a new package - run on HPC
 - 06 script to process the outputs of script 04 across all taxa, i.e., outputs obtained after HPC run
 - 07 script to explore the use of cluster analysis to group species with similar niches for the multi-species indicators
 - 08 script to explore relationships between continuous estimates of forest preference and species trends
