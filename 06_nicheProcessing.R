@@ -118,7 +118,7 @@ gamOutputs %>%
   xlab("Conif forest cover %") + ylab("Occupancy")+
   theme_classic()
 
-### linear association/gamm4 ##################################################
+### linear/gamm4 ##################################################
 
 gamOutputs <- getModels(modelFolder,modeltype = "mixed_linear")
 
@@ -126,17 +126,34 @@ gamOutputs <- getModels(modelFolder,modeltype = "mixed_linear")
 sort(unique(gamOutputs$Taxa))
 #missing moths
 
-### gam shape/gamm4 ###########################################################
+### gam shape/gamm4 ###############################################
 
-gamOutputs <- getModels(modelFolder,modeltype = "simple_shape")
+gamOutputs <- getModels(modelFolder,modeltype = "mixed_shape")
 
 #what taxa do we have?
 sort(unique(gamOutputs$Taxa))
 #missing moths 
 
-### compare models #############################################################
+### compare models #################################################
 
 #compare model with and without year as a random effect
+
+gamOutputs_mixed <- getModels(modelFolder,modeltype = "mixed_linear")
+gamOutputs_simple <- getModels(modelFolder,modeltype = "simple_linear")
+
+allGams <- bind_rows(gamOutputs_mixed,gamOutputs_simple) %>%
+  select(species, Taxa, modeltype, estimate, std_error) %>%
+  pivot_wider(everything(),
+              names_from="modeltype", 
+              values_from=c("estimate","std_error")) %>%
+  janitor::clean_names()
+
+ggplot(allGams) +
+  geom_point(aes(x = estimate_mixed_linear, y = estimate_simple_linear)) +
+  facet_wrap(~taxa, scales="free") +
+  geom_abline(aes(intercept = 0, slope = 1, linetype = "dashed"))
+
+
 gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
                                   modeltype = "simple_linear") %>%
                         add_column(forest = "broadleaf")
@@ -157,22 +174,28 @@ ggplot(allGams) +
   facet_wrap(~taxa, scales="free") +
   geom_abline(aes(intercept = 0, slope = 1, linetype = "dashed"))
 
-### compare decid vs conif #####################################################
+### compare decid vs conif #######################################
 
-#run script above twice
-gamOutputs_mixed <- getModels(modelFolder,modeltype = "mixed_linear")
-gamOutputs_simple <- getModels(modelFolder,modeltype = "simple_linear")
+gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
+                                  modeltype = "simple_linear") %>%
+                                  add_column(forest = "broadleaf")
 
-allGams <- bind_rows(gamOutputs_mixed,gamOutputs_simple) %>%
-  select(species, Taxa, modeltype, estimate, std_error) %>%
+gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
+                              modeltype = "simple_linear") %>%
+                              add_column(forest = "conif")
+
+allGams <- bind_rows(gamOutputs_broadleaf,gamOutputs_conif) %>%
+  select(forest, species, Taxa, modeltype, estimate, std_error) %>%
   pivot_wider(everything(),
-              names_from="modeltype", 
+              names_from="forest", 
               values_from=c("estimate","std_error")) %>%
   janitor::clean_names()
 
 ggplot(allGams) +
-  geom_point(aes(x = estimate_mixed_linear, y = estimate_simple_linear)) +
+  geom_point(aes(x = estimate_broadleaf, y = estimate_conif)) +
   facet_wrap(~taxa, scales="free") +
-  geom_abline(aes(intercept = 0, slope = 1, linetype = "dashed"))
+  geom_abline(aes(intercept = 0, slope = 1),linetype = "dashed")
 
-### end ########################################################################
+#mostly correlated
+
+### end ##########################################################
