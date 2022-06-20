@@ -10,6 +10,7 @@ Analysis of BRC data to assess forest niches and associations with long-term tre
 - 06 script to process the outputs of script 04 across all taxa, i.e., outputs obtained after HPC run
 - 07 script to explore the use of cluster analysis to group species with similar niches for the multi-species indicators
 - 08 script to explore relationships between continuous estimates of forest preference and species trends
+- 09 script to plot the msi indicators (processed on datalabs)
 - 10 script to look in more detail at carabid results
 - 11 script to look in more detail at moth results
 
