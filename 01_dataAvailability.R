@@ -92,47 +92,81 @@ summary(allData)
 
 ### region ####################################
 
-# get ordnance survey grid
-gridDir <- "C:/Users/diabow/OneDrive - UKCEH/Projects/General/OS-British-National-Grids-main"
-grid1km <- st_read(paste(gridDir,"os_bng_grids.gpkg",sep="/"), layer='1km_grid')
+#this step limits it to Britain
+
+#get ordnance survey grid
+# gridDir <- "C:/Users/diabow/OneDrive - UKCEH/Projects/General/OS-British-National-Grids-main"
+# grid1km <- st_read(paste(gridDir,"os_bng_grids.gpkg",sep="/"), layer='1km_grid')
+# 
+# #get GBR shape
+# GBR <- UK_countries %>%
+#   st_as_sf() %>%
+#   st_transform(crs = 27700)
+# 
+# #check they overlap
+# tm_shape(GBR)+
+#   tm_borders()+
+# tm_shape(grid1km)+
+#   tm_fill()
+# 
+# #get region of each grid
+# grid1km <- st_join(grid1km, GBR) %>%
+#             filter(!duplicated(tile_name)) %>%
+#             rename(TO_GRIDREF = tile_name) %>%
+#             as_tibble() %>%
+#             select(TO_GRIDREF,COUNTRY)
+# 
+# 
+# #add on to taxa data
+# allData <- allData %>%
+#   left_join(.,grid1km,by = "TO_GRIDREF")
+
 
 #get GBR shape
 GBR <- UK_countries %>%
   st_as_sf() %>%
   st_transform(crs = 27700)
 
-#check they overlap
-#tm_shape(GBR)+
-#  tm_borders()+
-#tm_shape(grid1km)+
-#  tm_fill()
+#get region of each coord
+coordsRegion <- st_as_sf(coords,coords=c("EASTING","NORTHING"),crs = 27700) %>%
+  st_join(., GBR)
 
-#get region of each grid
-grid1km <- st_join(grid1km, GBR) %>%
-            filter(!duplicated(tile_name)) %>%
-            rename(TO_GRIDREF = tile_name) %>%
-            as_tibble() %>%
-            select(TO_GRIDREF,COUNTRY)
+#where are the NAs? coastal
+coordsRegion %>%
+  filter(is.na(COUNTRY)) %>%
+tm_shape()+
+  tm_dots()
 
+#buffer these points with missing data
+coordsRegionBuffer <- st_as_sf(coords,coords=c("EASTING","NORTHING"),crs = 27700) %>%
+                  st_buffer(dist = 500) %>%
+                  filter(TO_GRIDREF %in% subset(coordsRegion,is.na(COUNTRY))$TO_GRIDREF) %>%
+                  st_join(., GBR) #all now matchins
+
+#combine all
+allRegions <- coordsRegion %>%
+                filter(!is.na(COUNTRY)) %>%
+                bind_rows(coordsRegionBuffer) %>%
+                as_tibble() %>%
+                select(TO_GRIDREF,COUNTRY)
 
 #add on to taxa data
 allData <- allData %>%
-  left_join(.,grid1km,by = "TO_GRIDREF")
+  left_join(., allRegions, by = "TO_GRIDREF")
 
 ### summarise data ###############################
 
 allData %>%
-  filter(YEAR > 1979) %>%
+  filter(YEAR > 1969) %>%
   group_by(Taxa) %>%
   summarise(nuRecs = length(CONCEPT), 
             nuSpecies = length(unique(CONCEPT)),
             nuYears = length(unique(YEAR)),
             nu1kmGrids = length(unique(TO_GRIDREF))) %>%
   arrange(desc(nuRecs))
-#sample things down to 100,000 records?
 
 taxaSummary <- allData %>%
-                filter(YEAR > 1979) %>%
+                filter(YEAR > 1969) %>%
                 group_by(Taxa, COUNTRY) %>%
                 summarise(nuRecs = length(CONCEPT), 
                           nuSpecies = length(unique(CONCEPT)),
@@ -141,7 +175,7 @@ taxaSummary <- allData %>%
                 filter(!is.na(COUNTRY))
 
 speciesSummary <- allData %>%
-                    filter(YEAR > 1979) %>%
+                    filter(YEAR > 1969) %>%
                     group_by(Taxa, CONCEPT, COUNTRY) %>%
                     summarise(nuRecs = length(CONCEPT), 
                     nuYears = length(unique(YEAR))) %>%
