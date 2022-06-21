@@ -88,7 +88,7 @@ visit_data %>%
 ### occu model ############################################
 
 m_spline2d <- fit_occu(list(psi ~ 1 + t2(X, Y, bs = "ts", k=10),
-                            p ~ nuSpecies + yday),
+                            p ~ Year + LL + yday + yday2),
                        as.data.table(visit_data),
                        as.data.table(site_data))
 
@@ -105,7 +105,7 @@ saveRDS(covariateEffects, file=paste0(outputDir,"/Gam_basic_",myspecies,".rds"))
 ### forest occu model ##########################################
 
 m_spline2d <- fit_occu(list(psi ~ forestcover + t2(X, Y, bs = "ts", k=10),
-                            p ~ nuSpecies + yday),
+                            p ~ Year + LL + yday + yday2),
                        as.data.table(visit_data),
                        as.data.table(site_data))
 
