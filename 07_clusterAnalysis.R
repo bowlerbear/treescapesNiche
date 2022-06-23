@@ -38,7 +38,12 @@ mean(gamSummary$sdPreds==0) # few!!
 gamOutputs <- gamOutputs %>%
   filter(Species %in% gamSummary$Species[gamSummary$sdPreds!=0])
 
-#### kmeans #########################################
+#### pam #########################################
+
+#clusters both the height and the shape of the niche
+#scale them relative to mean occupancy
+
+library(cluster)
 
 #put into a matrix
 speciesResponses <- reshape2::acast(gamOutputs,
@@ -47,7 +52,7 @@ speciesResponses <- reshape2::acast(gamOutputs,
 
 dim(speciesResponses)
 
-#scale each column
+#scale each column 
 mydata <- apply(speciesResponses, 2, function(x){
   scale(boot::logit(x))})
 
@@ -65,8 +70,8 @@ plot(1:15, wss, type="b", xlab="Number of Clusters",
      ylab="Within groups sum of squares")
 
 #pick one
-fit <- kmeans(mydata, 4) # cluster solution
-mydata <- data.frame(mydata, cluster = fit$cluster)
+fit <- pam(mydata, 4) # cluster solution
+mydata <- data.frame(mydata, cluster = fit$clustering)
 table(mydata$cluster)
 
 #add back onto the gamOutput
@@ -125,14 +130,13 @@ fit <- hclust(IP.dis)
 plot(fit)
 
 #choose clusters
-IP.clus <- pam(IP.dis, k = 4)$clustering
-table(IP.clus)
-clusterDF <- data.frame(Species = names(IP.clus), 
-                        Cluster = as.numeric(IP.clus))
+fit <- pam(IP.dis, k = 4)
+mydata <- data.frame(mydata, cluster = fit$clustering)
+table(mydata$cluster)
 
 #add back onto the gamOutput
-gamOutputs$cluster <- clusterDF$Cluster[match(gamOutputs$Species,
-                                             clusterDF$Species)]
+gamOutputs$cluster <- mydata$cluster[match(gamOutputs$Species,
+                                           row.names(mydata))]
 
 #mean per cluster
 gamOutputs %>%
@@ -145,6 +149,16 @@ gamOutputs %>%
 
 ggsave("plots/clustering_all_corr_means.png")
 
+#species within
+gamOutputs %>%
+  group_by(Species, Taxa, cluster) %>%
+  mutate(preds = scale(preds)) %>%
+  ungroup %>%
+  ggplot()+
+  geom_line(aes(x = decidForest, y = preds, groups = Species))+
+  xlab("Decid forest cover %") + ylab("Occupancy")+
+  facet_wrap(~cluster)
+
 #how each taxa is distributed in each cluster
 gamOutputs %>%
   group_by(Taxa, cluster) %>%
@@ -153,13 +167,13 @@ gamOutputs %>%
   ggplot() +
   geom_col(aes(x=Taxa, y = nuSpecies, fill = factor(cluster))) +
   coord_flip()
-
 ggsave("plots/clustering_all_corr_prop.png")
 
+#save classification
 gamOutputs %>%
   select(Species, cluster) %>%
   filter(!duplicated(Species)) %>%
-  saveRDS(., file="outputs/clustering/corr_classification_all.rds")
+saveRDS(., file="outputs/clustering/corr_classification_all.rds")
 
 #### derivatives ######################################
 
