@@ -186,3 +186,28 @@ speciesSummary <- allData %>%
 taxaSummary <- left_join(taxaSummary,speciesSummary)     
 
 write.table(taxaSummary, file="inputs/taxaSummary.txt",sep="\t",row.names=FALSE)
+
+### maps ##########################################################
+
+#simplfy data to per decade for maps
+mapSummary <- allData %>%
+                group_by(Taxa,Decade,EASTING,NORTHING) %>%
+                summarise(nuRecs = length(CONCEPT)) %>%
+                ungroup()
+
+AG <- fortify(as(GBR,'Spatial'))
+
+mapSummary %>%
+  filter(Decade>1960) %>%
+  filter(Taxa %in% sort(unique(allData$Taxa))[31:33]) %>%
+ggplot() +
+  geom_point(aes(x=EASTING, y=NORTHING, colour=log10(nuRecs)), 
+             size=rel(0.05))+
+  scale_colour_viridis_c()+
+  geom_polygon(data=AG, aes(long, lat, group = group),fill=NA)+
+  facet_grid(Taxa~Decade)+ 
+  theme_void()
+
+ggsave("inputs/map_data_taxaset7.png",width=7,height=5)
+                       
+### end ##########################################################
