@@ -100,7 +100,7 @@ covariateEffects <- summary(m_spline2d$res,"fixed", p.value=TRUE) %>%
   janitor::clean_names() %>%
   add_column(para = c("psi_intercept","p_intercept","p_nuSpecies","p_yday","spline"))
 
-saveRDS(covariateEffects, file=paste0(outputDir,"/Gam_basic_",myspecies,".rds"))
+saveRDS(covariateEffects, file=paste0(outputDir,"/oocuGam_basic_",myspecies,".rds"))
 
 ### forest occu model ##########################################
 
@@ -117,7 +117,7 @@ covariateEffects <- summary(m_spline2d$res,"fixed", p.value=TRUE) %>%
   janitor::clean_names() %>%
   add_column(para = c("psi_intercept","psi_forestcover","p_intercept","p_nuSpecies","p_yday","spline"))
 
-saveRDS(covariateEffects, file=paste0(outputDir,"/Gam_forestcover_",myspecies,".rds"))
+saveRDS(covariateEffects, file=paste0(outputDir,"/occuGam_forestcover_",myspecies,".rds"))
 
 ### end ####################################################
 
