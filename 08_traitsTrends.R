@@ -4,10 +4,10 @@ library(tidyverse)
 library(ggridges)
 theme_set(theme_classic())
 
-selectTaxa <-  c("Ants", "AquaticBugs","Bees","Bryophytes","Carabids","Centipedes","Craneflies",
-                 "Dragonflies","E&D","Ephemeroptera","FungusGnats","Gelechiids","Hoverflies",
-                 "Ladybirds","LeafSeedBeetles","Lichens","Millipedes","Molluscs","Moths","Neuropterida",
-                 "Orthoptera","PlantBugs","Plecoptera","RoveBeetles","ShieldBugs","SoldierBeetles",
+selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflies",
+                 "Dragonflies","E&D","Ephemeroptera","Gelechiids","Hoverflies",
+                 "Ladybirds","LeafSeedBeetles","Molluscs","Moths",
+                 "Orthoptera","PlantBugs","ShieldBugs",
                  "Soldierflies","Spiders","Trichoptera","Wasps","Weevils")
 
 ### choose models #######################
@@ -58,8 +58,6 @@ gamOutputs <- list.files(forestFolder,full.names=TRUE) %>%
                   mutate(species = tolower(species),
                          forest_assoc = estimate)
                   
-### merge ################################
-
 df <- inner_join(spTrends, gamOutputs, by = c("species","Taxa"))
 
 ### outlier ##############################
@@ -74,6 +72,22 @@ ggplot(df) +
   facet_wrap(~Taxa) +
   geom_hline(yintercept = 0, linetype="dashed") +
   geom_vline(xintercept = 0, linetype="dashed") 
+
+ggplot(df) +
+  geom_point(aes(x = forest_assoc, y = mean_change, colour=Taxa)) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  geom_vline(xintercept = 0, linetype="dashed") 
+
+ggplot(df) +
+  geom_bin2d(aes(x = forest_assoc, y = mean_change)) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  geom_vline(xintercept = 0, linetype="dashed") 
+
+ggplot(df) +
+  geom_bin2d(aes(x = forest_assoc, y = mean_change)) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  geom_vline(xintercept = 0, linetype="dashed") +
+  facet_wrap(~cluster)
 
 ### lms #################################
 
@@ -105,7 +119,7 @@ getForestEffect <- function(taxa){
 lapply(sort(unique(df$Taxa))[26:28], function(x){
   temp <- getForestEffect(x)
   saveRDS(temp,file=paste0("outputs/forestVStrends/forestVStrends_",x,".rds"))
-  })
+})
 
 ### process lms #########################
 
@@ -133,5 +147,55 @@ g2 <- ggplot(lmOutputs)+
 
 cowplot::plot_grid(g1,g2, labels=c("A","B"))
 ggsave("plots/forestVStrends.png",width=6, height=3.5)
+
+### cluster differences ############################
+
+clusterDF <- readRDS("outputs/clustering/deriv_classification_all.rds") %>%
+                janitor::clean_names() %>%
+                mutate(species = tolower(species))
+
+#merge with trends
+spTrends <- spTrends %>%
+              inner_join(.,clusterDF)
+
+ggplot(spTrends) +
+  geom_boxplot(aes(x = Taxa, y = mean_change)) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  coord_flip() +
+  facet_wrap(~cluster,nrow=1)
+
+ggplot(spTrends) +
+  geom_boxplot(aes(x = Taxa, y = mean_initial)) +
+  coord_flip() +
+  facet_wrap(~cluster,nrow=1)
+
+ggplot(spTrends)+
+  geom_point(aes(x=mean_initial, y = mean_change))+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+  facet_wrap(~cluster)
+
+### relative differences ###################
+
+#get mean trend of each and get differences from mean
+rel_spTrends <- spTrends %>%
+                  group_by(Taxa) %>%
+                  mutate(medChange = median(mean_change),
+                         mean_change - medChange) %>%
+                  ungroup()
+
+ggplot(rel_spTrends) +
+  geom_boxplot(aes(x = Taxa, y = mean_change)) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  coord_flip() +
+  facet_wrap(~cluster,nrow=1)
+
+ggplot(rel_spTrends) +
+  geom_boxplot(aes(x = factor(cluster), y = mean_change)) +
+  geom_hline(yintercept = 0, linetype="dashed") 
+
+ggplot(rel_spTrends) +
+  geom_boxplot(aes(x = Taxa, y = mean_change, fill=factor(cluster))) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  coord_flip() 
 
 ### end ##################################
