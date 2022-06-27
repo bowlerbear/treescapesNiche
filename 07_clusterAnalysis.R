@@ -1,6 +1,7 @@
 ### cluster-analysis #################################
 
 library(tidyverse)
+library(cluster)
 
 selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflies",
                  "Dragonflies","E&D","Ephemeroptera","Gelechiids","Hoverflies",
@@ -33,7 +34,7 @@ gamOutputs <- list.files(modelFolder,full.names=TRUE) %>%
   set_names() %>%
   map_dfr(readRDS, .id="source") %>%
   group_by(source) %>%
-  mutate(Taxa = strsplit(source,"_")[[1]][6]) %>%
+  mutate(Taxa = strsplit(source,"_")[[1]][7]) %>%
   ungroup() %>%
   filter(Taxa %in% selectTaxa) %>%
   mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
@@ -282,7 +283,8 @@ gamOutputs %>%
   ggplot()+
   geom_line(aes(x = decidForest, y = preds))+
   xlab("Decid forest cover %") + ylab("Occupancy")+
-  facet_wrap(~cluster)
+  facet_wrap(~cluster) +
+  theme_classic()
 #open = 1
 #general = 2
 #forest = 3
@@ -297,14 +299,14 @@ gamOutputs %>%
   ungroup() %>%
   ggplot() +
   geom_col(aes(x=Taxa, y = nuSpecies, fill = factor(cluster))) +
-  coord_flip()
+  coord_flip()+
+  theme_classic()
 
 ggsave("plots/clustering_all_deriv_prop.png")
 
 gamOutputs %>%
   select(Species, cluster) %>%
   filter(!duplicated(Species)) %>%
-
 saveRDS(., file="outputs/clustering/deriv_classification_all.rds")
 
 ### concordance #####################################
