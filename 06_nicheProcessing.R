@@ -4,12 +4,12 @@ library(tidyverse)
 library(ggridges)
 theme_set(theme_classic())
 
-selectTaxa <-  c("Ants", "AquaticBugs","Bees","Bryophytes","Carabids","Centipedes","Craneflies",
-                 "Dragonflies","E&D","Ephemeroptera","FungusGnats","Gelechiids","Hoverflies",
-                 "Ladybirds","LeafSeedBeetles","Lichens","Millipedes","Molluscs","Moths","Neuropterida",
-                 "Orthoptera","PlantBugs","Plecoptera","RoveBeetles","ShieldBugs","SoldierBeetles",
+selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflies",
+                 "Dragonflies","E&D","Ephemeroptera","Gelechiids","Hoverflies",
+                 "Ladybirds","LeafSeedBeetles","Molluscs","Moths",
+                 "Orthoptera","PlantBugs","ShieldBugs",
                  "Soldierflies","Spiders","Trichoptera","Wasps","Weevils")
-#31 of them
+
 
 ### choose models ###########################
 
