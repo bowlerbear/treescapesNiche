@@ -278,6 +278,10 @@ gamOutputs %>%
 
 #mean per cluster
 gamOutputs %>%
+  mutate(cluster = case_when(cluster==1 ~ 'open',
+                             cluster==2 ~ 'flat',
+                             cluster==3 ~ 'forest',
+                             cluster==4 ~ 'humped')) %>%
   group_by(cluster,decidForest) %>%
   summarise(preds = median(preds)) %>%
   ggplot()+
@@ -297,8 +301,15 @@ gamOutputs %>%
   group_by(Taxa, cluster) %>%
   summarise(nuSpecies = length(unique(Species))) %>%
   ungroup() %>%
+  mutate(cluster = case_when(cluster==1 ~ 'open',
+                             cluster==2 ~ 'flat',
+                             cluster==3 ~ 'forest',
+                             cluster==4 ~ 'humped')) %>%
+  mutate(cluster = factor(cluster, 
+                          levels=c("forest","humped","flat","open"))) %>%
   ggplot() +
-  geom_col(aes(x=Taxa, y = nuSpecies, fill = factor(cluster))) +
+  geom_col(aes(x=Taxa, y = nuSpecies, fill = cluster)) +
+  scale_fill_brewer(palette = "RdYlGn", direction =-1) +
   coord_flip()+
   theme_classic()
 
