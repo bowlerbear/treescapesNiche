@@ -92,22 +92,22 @@ visit_data %>%
 
 ### occu model ############################################
 
-m_spline2d <- fit_occu(list(psi ~ 1 + t2(X, Y, bs = "ts", k=10),
-                            p ~ LL + yday + yday2),
-                       as.data.table(visit_data),
-                       as.data.table(site_data))
-
-m_spline2d
-
-#covariate effects
-covariateEffects <- summary(m_spline2d$res,"fixed", p.value=TRUE) %>%
-  as_tibble() %>%
-  janitor::clean_names() %>%
-  add_column(para = c("psi_intercept","p_intercept",
-                      "LLshort","LLsingle",
-                      "yday","yday2","log_lambda_psi"))
-
-saveRDS(covariateEffects, file=paste0(outputDir,"/oocuGam_basic_",myspecies,".rds"))
+# m_spline2d <- fit_occu(list(psi ~ 1 + t2(X, Y, bs = "ts", k=10),
+#                             p ~ LL + yday + yday2),
+#                        as.data.table(visit_data),
+#                        as.data.table(site_data))
+# 
+# m_spline2d
+# 
+# #covariate effects
+# covariateEffects <- summary(m_spline2d$res,"fixed", p.value=TRUE) %>%
+#   as_tibble() %>%
+#   janitor::clean_names() %>%
+#   add_column(para = c("psi_intercept","p_intercept",
+#                       "LLshort","LLsingle",
+#                       "yday","yday2","log_lambda_psi"))
+# 
+# saveRDS(covariateEffects, file=paste0(outputDir,"/oocuGam_basic_",myspecies,".rds"))
 
 ### forest occu model ##########################################
 
