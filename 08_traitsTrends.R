@@ -52,7 +52,7 @@ gamOutputs <- list.files(forestFolder,full.names=TRUE) %>%
                   set_names() %>%
                   map_dfr(readRDS, .id="source") %>%
                   group_by(source) %>%
-                  mutate(Taxa = strsplit(source,"_")[[1]][5]) %>%
+                  mutate(Taxa = strsplit(source,"_")[[1]][6]) %>%
                   ungroup() %>%
                   filter(Taxa %in% selectTaxa) %>%
                   mutate(species = tolower(species),
@@ -68,6 +68,12 @@ df <- df %>%
 ###plotting ##############################
 
 ggplot(df) +
+  geom_point(aes(x = forest_assoc, y = mean_change, colour=Taxa)) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  geom_vline(xintercept = 0, linetype="dashed") +
+  theme_classic()
+
+ggplot(df) +
   geom_point(aes(x = forest_assoc, y = mean_change)) +
   facet_wrap(~Taxa) +
   geom_hline(yintercept = 0, linetype="dashed") +
@@ -80,73 +86,23 @@ ggplot(df) +
 
 ggplot(df) +
   geom_bin2d(aes(x = forest_assoc, y = mean_change)) +
-  geom_hline(yintercept = 0, linetype="dashed") +
-  geom_vline(xintercept = 0, linetype="dashed") 
-
-ggplot(df) +
-  geom_bin2d(aes(x = forest_assoc, y = mean_change)) +
+  scale_fill_viridis_c("number of species") +
   geom_hline(yintercept = 0, linetype="dashed") +
   geom_vline(xintercept = 0, linetype="dashed") +
-  facet_wrap(~cluster)
+  xlab("Forest association") + ylab("Species growth rate")+
+  xlim(-0.2,0.15)+
+  theme(legend.position = "top")
+ggsave("plots/forestVStrends.png",width=5, height=3.5)
 
-### lms #################################
-
-#https://github.com/paul-buerkner/brms/issues/643
-
-getForestEffect <- function(taxa){
-  
-  require(brms)
-  
-  df1 <- subset(df,Taxa==taxa & forest_assoc>0)
-  bm1 <- brm(mean_change|se(sd_change, sigma = TRUE) ~ me(forest_assoc, std_error),
-             data = df1)
-  
-  
-  df2 <- subset(df,Taxa==taxa & forest_assoc<0)
-  bm2 <- brm(mean_change|se(sd_change, sigma = TRUE) ~ me(forest_assoc, std_error),
-             data = df2)
-  
-  
-  data.frame(Taxa = taxa,
-            posEffect = fixef(bm1)[2,1],
-            posEffect_se = fixef(bm1)[2,2],
-            negEffect = fixef(bm2)[2,1],
-            negEffect_se = fixef(bm2)[2,2])
-            
-}
-
-
-lapply(sort(unique(df$Taxa))[26:28], function(x){
-  temp <- getForestEffect(x)
-  saveRDS(temp,file=paste0("outputs/forestVStrends/forestVStrends_",x,".rds"))
-})
-
-### process lms #########################
-
-lmOutputs <- list.files("outputs/forestVStrends",full.names = TRUE) %>%
-              map_dfr(readRDS)
-
-
-g1 <- ggplot(lmOutputs)+
-  geom_pointrange(aes(x = Taxa, y = posEffect, 
-                      ymin =posEffect - posEffect_se,
-                      ymax = posEffect + posEffect_se),
-                      size = rel(0.3))+
-  geom_hline(yintercept=0, linetype="dashed")+
-  ylab("effect of forest specialisation")+
-  coord_flip()
-
-g2 <- ggplot(lmOutputs)+
-  geom_pointrange(aes(x = Taxa, y = negEffect, 
-                      ymin =negEffect - negEffect_se,
-                      ymax = negEffect + negEffect_se),
-                      size = rel(0.3))+
-  geom_hline(yintercept=0, linetype="dashed")+
-  ylab("effect of forest avoidance")+
-  coord_flip()
-
-cowplot::plot_grid(g1,g2, labels=c("A","B"))
-ggsave("plots/forestVStrends.png",width=6, height=3.5)
+df %>%
+  mutate(cluster = case_when(cluster==1 ~ 'open',
+                             cluster==2 ~ 'flat',
+                             cluster==3 ~ 'forest',
+                             cluster==4 ~ 'humped'))%>% 
+ggplot() +
+  geom_bin2d(aes(x = forest_assoc, y = mean_change)) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  geom_vline(xintercept = 0, linetype="dashed") 
 
 ### cluster differences ############################
 
@@ -156,7 +112,7 @@ clusterDF <- readRDS("outputs/clustering/deriv_classification_all.rds") %>%
 
 #merge with trends
 spTrends <- spTrends %>%
-              inner_join(.,clusterDF)
+              inner_join(.,clusterDF) 
 
 ggplot(spTrends) +
   geom_boxplot(aes(x = Taxa, y = mean_change)) +
@@ -174,14 +130,33 @@ ggplot(spTrends)+
   geom_hline(yintercept = 0, linetype = "dashed")+
   facet_wrap(~cluster)
 
+spTrends %>%
+  mutate(cluster = case_when(cluster==1 ~ 'open',
+                             cluster==2 ~ 'flat',
+                             cluster==3 ~ 'forest',
+                             cluster==4 ~ 'humped')) %>%
+ggplot() +
+  geom_violin(aes(x = cluster, y = mean_change), draw_quantiles = c(0.25,0.5,0.75)) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  ylab("Species growth rate")
+
+ggsave("plots/forest_vs_cluster.png",width=5, height=4)
+
 ### relative differences ###################
 
 #get mean trend of each and get differences from mean
 rel_spTrends <- spTrends %>%
+                  group_by(Taxa, cluster) %>%
+                  mutate(medChange = median(mean_change)) %>%
+                  ungroup() %>%
                   group_by(Taxa) %>%
-                  mutate(medChange = median(mean_change),
-                         mean_change - medChange) %>%
-                  ungroup()
+                  mutate(medChange = median(medChange),
+                         mean_change = mean_change - medChange) %>%
+                  ungroup()%>%
+                  mutate(cluster = case_when(cluster==1 ~ 'open',
+                             cluster==2 ~ 'flat',
+                             cluster==3 ~ 'forest',
+                             cluster==4 ~ 'humped'))
 
 ggplot(rel_spTrends) +
   geom_boxplot(aes(x = Taxa, y = mean_change)) +
@@ -190,12 +165,32 @@ ggplot(rel_spTrends) +
   facet_wrap(~cluster,nrow=1)
 
 ggplot(rel_spTrends) +
-  geom_boxplot(aes(x = factor(cluster), y = mean_change)) +
+  geom_boxplot(aes(x = cluster, y = mean_change)) +
   geom_hline(yintercept = 0, linetype="dashed") 
 
 ggplot(rel_spTrends) +
-  geom_boxplot(aes(x = Taxa, y = mean_change, fill=factor(cluster))) +
+  geom_boxplot(aes(x = Taxa, y = mean_change, fill=cluster)) +
   geom_hline(yintercept = 0, linetype="dashed") +
-  coord_flip() 
+  coord_flip() +
+  ylab("Mean growth rate (relative to taxa mean)")
+
+#not made relative
+spTrends %>%
+  mutate(cluster = case_when(cluster==1 ~ 'open',
+                             cluster==2 ~ 'flat',
+                             cluster==3 ~ 'forest',
+                             cluster==4 ~ 'humped')) %>%
+  mutate(cluster = factor(cluster, 
+                          levels=c("forest","humped","flat","open"))) %>%
+ggplot() +
+  geom_boxplot(aes(x = Taxa, y = mean_change, fill=cluster), 
+               outlier.shape = NA) +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  coord_flip() +
+  scale_fill_brewer(palette = "RdYlGn", direction =-1) +
+  ylab("Mean species growth rate") +
+  theme(legend.position = "top")
+
+ggsave("plots/forest_species_vs_cluster.png",width=5, height=7)
 
 ### end ##################################
