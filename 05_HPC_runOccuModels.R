@@ -51,6 +51,11 @@ visit_data$LL <- ifelse(visit_data$nuSpecies==1,"single",
                         ifelse(visit_data$nuSpecies %in% 2:3, "short",
                                "else"))
 
+#scale forest
+visit_data$decidForest <- as.numeric(scale(visit_data$decidForest))
+visit_data$yday <- as.numeric(scale(visit_data$yday))
+visit_data$yday2 <- as.numeric(scale(visit_data$yday2))
+
 table(visit_data$LL)
 
 ### indices ###########################################
@@ -88,7 +93,7 @@ visit_data %>%
 ### occu model ############################################
 
 m_spline2d <- fit_occu(list(psi ~ 1 + t2(X, Y, bs = "ts", k=10),
-                            p ~ Year + LL + yday + yday2),
+                            p ~ LL + yday + yday2),
                        as.data.table(visit_data),
                        as.data.table(site_data))
 
@@ -98,14 +103,16 @@ m_spline2d
 covariateEffects <- summary(m_spline2d$res,"fixed", p.value=TRUE) %>%
   as_tibble() %>%
   janitor::clean_names() %>%
-  add_column(para = c("psi_intercept","p_intercept","p_nuSpecies","p_yday","spline"))
+  add_column(para = c("psi_intercept","p_intercept",
+                      "LLshort","LLsingle",
+                      "yday","yday2","log_lambda_psi"))
 
 saveRDS(covariateEffects, file=paste0(outputDir,"/oocuGam_basic_",myspecies,".rds"))
 
 ### forest occu model ##########################################
 
-m_spline2d <- fit_occu(list(psi ~ forestcover + t2(X, Y, bs = "ts", k=10),
-                            p ~ Year + LL + yday + yday2),
+m_spline2d <- fit_occu(list(psi ~ decidForest + t2(X, Y, bs = "ts", k=10),
+                            p ~ LL + yday + yday2),
                        as.data.table(visit_data),
                        as.data.table(site_data))
 
@@ -115,7 +122,10 @@ m_spline2d
 covariateEffects <- summary(m_spline2d$res,"fixed", p.value=TRUE) %>%
   as_tibble() %>%
   janitor::clean_names() %>%
-  add_column(para = c("psi_intercept","psi_forestcover","p_intercept","p_nuSpecies","p_yday","spline"))
+  add_column(para = c("psi_intercept","decidForest",
+                      "p_intercept",
+                      "LLshort","LLsingle",
+                      "yday","yday2","log_lambda_psi"))
 
 saveRDS(covariateEffects, file=paste0(outputDir,"/occuGam_forestcover_",myspecies,".rds"))
 
