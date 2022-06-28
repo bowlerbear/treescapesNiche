@@ -50,11 +50,62 @@ spTrends$Species <- sapply(spTrends$Species, function(x){
 
 ### get pantheon database #####
 
-mothTrends <- readRDS("outputs/sp_change_Moths.rds") %>%
-  rename(Concept = species)
+indexDir <- "C:/Users/diabow/OneDrive - UKCEH/Projects/General/Pantheon/species-index"
+indexFile <- read_csv(paste(indexDir,"species-index.csv",sep="/")) %>%
+  janitor::clean_names() %>%
+  rename(Species = species)
 
-mothTrends$Species <- speciesNames$NAME[match(mothTrends$Concept, tolower(speciesNames$CONCEPT))]
+spTrends <- spTrends %>%
+  left_join(.,indexFile, by="Species") 
 
-mothTrends <- mothTrends %>%
-  left_join(.,traitsDF, by="Species") 
+### forest traits #####
 
+names(indexFile)
+table(spTrends$habitat)
+
+#broad classification
+treeDF <- spTrends %>%
+          filter(broad_biotope == "tree-associated")
+
+g1 <- treeDF %>%
+  filter(!Taxa %in% c("Trichoptera","Orthoptera","Ladybirds")) %>% # little data for these
+ggplot()+
+  geom_boxplot(aes(x=Taxa, y = median_change)) +
+  ylab("Species growth rate")+
+  geom_hline(yintercept=0, linetype="dashed")+
+  coord_flip() 
+
+
+#broad classification
+treeDF <- spTrends %>%
+  filter(habitat %in% c("arboreal","decaying wood","shaded woodland floor"))
+
+g2 <- treeDF %>%
+  filter(!Taxa %in% c("Trichoptera","Orthoptera","Ladybirds")) %>% # little data for these
+  ggplot()+
+  geom_boxplot(aes(x=Taxa, y = median_change, fill=habitat)) +
+  ylab("Species growth rate")+
+  geom_hline(yintercept=0, linetype="dashed")+
+  coord_flip() 
+
+cowplot::plot_grid(g1,g2,nrow=2)
+
+### conservation status ####
+
+table(spTrends$conservation_status)
+
+#S41 species as a measure of conservation status
+spTrends$S41 <- sapply(spTrends$conservation_status, function(x){
+  ifelse(grepl("Section 41",x),1,0)
+})
+table(spTrends$S41)
+
+spTrends %>%
+  filter(S41==1)%>%
+  ggplot()+
+  geom_boxplot(aes(x=Taxa, y = median_change)) +
+  ylab("Species growth rate")+
+  geom_hline(yintercept=0, linetype="dashed")+
+  coord_flip() 
+
+  
