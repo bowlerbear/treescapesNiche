@@ -53,6 +53,13 @@ mean(gamSummary$sdPreds==0) # few!!
 gamOutputs <- gamOutputs %>%
   filter(Species %in% gamSummary$Species[gamSummary$sdPreds!=0])
 
+
+#remove species with large sd
+mean(gamSummary$sdPreds>0.05) # quite a few...
+gamOutputs <- gamOutputs %>%
+  filter(Species %in% gamSummary$Species[gamSummary$sdPreds<0.05])
+nrow(gamOutputs)
+
 #### pam #########################################
 
 #clusters both the height and the shape of the niche
@@ -278,10 +285,10 @@ gamOutputs %>%
 
 #mean per cluster
 gamOutputs %>%
-  mutate(cluster = case_when(cluster==1 ~ 'open',
-                             cluster==2 ~ 'flat',
-                             cluster==3 ~ 'forest',
-                             cluster==4 ~ 'humped')) %>%
+  mutate(cluster = case_when(cluster==1 ~ 'flat',
+                             cluster==2 ~ 'humped',
+                             cluster==3 ~ 'open',
+                             cluster==4 ~ 'forest')) %>%
   group_by(cluster,decidForest) %>%
   summarise(preds = median(preds)) %>%
   ggplot()+
@@ -289,11 +296,10 @@ gamOutputs %>%
   xlab("Decid forest cover %") + ylab("Occupancy")+
   facet_wrap(~cluster) +
   theme_classic()
-#open = 1
-#general = 2
-#forest = 3
-#humped = 4
-
+#flat = 1
+#humped = 2
+#open = 3
+#forest = 4
 ggsave("plots/clustering_all_deriv_means.png")
 
 #how each taxa is distributed in each cluster
@@ -301,10 +307,10 @@ gamOutputs %>%
   group_by(Taxa, cluster) %>%
   summarise(nuSpecies = length(unique(Species))) %>%
   ungroup() %>%
-  mutate(cluster = case_when(cluster==1 ~ 'open',
-                             cluster==2 ~ 'flat',
-                             cluster==3 ~ 'forest',
-                             cluster==4 ~ 'humped')) %>%
+  mutate(cluster = case_when(cluster==1 ~ 'flat',
+                             cluster==2 ~ 'humped',
+                             cluster==3 ~ 'open',
+                             cluster==4 ~ 'forest')) %>%
   mutate(cluster = factor(cluster, 
                           levels=c("forest","humped","flat","open"))) %>%
   ggplot() +
