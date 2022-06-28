@@ -49,3 +49,12 @@ spTrends$Species <- sapply(spTrends$Species, function(x){
 }) %>% as.character()
 
 ### get pantheon database #####
+
+mothTrends <- readRDS("outputs/sp_change_Moths.rds") %>%
+  rename(Concept = species)
+
+mothTrends$Species <- speciesNames$NAME[match(mothTrends$Concept, tolower(speciesNames$CONCEPT))]
+
+mothTrends <- mothTrends %>%
+  left_join(.,traitsDF, by="Species") 
+
