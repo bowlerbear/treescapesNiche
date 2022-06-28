@@ -61,14 +61,14 @@ taxaData$Present <- taxaData$Species %in% indexFile$Species
 tapply(taxaData$Present,taxaData$Taxa,mean)
 
 #can we get any of these as a synonymn
-#missingSpecies <- sort(unique(spTrends$Species))[!unique(spTrends$Species) %in%
-#                                                   indexFile$Species]
+missingSpecies <- sort(unique(spTrends$Species))[!unique(spTrends$Species) %in%
+                                                   indexFile$Species]
 
 #join all
 spTrends <- spTrends %>%
   left_join(.,indexFile, by="Species") 
 
-### forest traits #####
+### habitat traits #####
 
 names(indexFile)
 table(spTrends$broad_biotope)
@@ -124,5 +124,26 @@ spTrends %>%
   geom_col(aes(x=Taxa, y = nuSpecies, fill=direction)) +
   ylab("Number of species")
 ggsave("plots/conservation_status.png",width=6,height=3)
+
+### full list ####
+
+prioritySpecies <- list.files("C:/Users/diabow/OneDrive - UKCEH/Projects/General/Protection",
+                              pattern='.csv') %>%
+                    read.csv(.,skip=1)
+
+sum(missingSpecies %in% prioritySpecies$NBN.current.scientific.name)
+
+spTrends$priority <- ifelse(spTrends$Species %in% prioritySpecies$NBN.current.scientific.name,
+                            1,0)
+
+spTrends %>%
+  filter(broad_biotope == "tree-associated") %>%
+  filter(priority==1)%>%
+  mutate(direction = ifelse(median_change>0,"increase","decrease"))%>%
+  group_by(Taxa, direction) %>%
+  summarise(nuSpecies = length(unique(species)))%>%
+  ggplot()+
+  geom_col(aes(x=Taxa, y = nuSpecies, fill=direction)) +
+  ylab("Number of species")
 
 ### end ######################
