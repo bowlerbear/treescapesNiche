@@ -24,7 +24,7 @@ list.files(modelFolder,full.names=TRUE) %>%
   set_names() %>%
   map_dfr(readRDS, .id="source") %>%
   group_by(source) %>%
-  mutate(Taxa = strsplit(source,"_")[[1]][5]) %>%
+  mutate(Taxa = strsplit(source,"_")[[1]][6]) %>%
   ungroup() %>%
   filter(Taxa %in% selectTaxa) %>%
   group_by(Taxa) %>%
@@ -58,6 +58,7 @@ getModels <- function(modelFolder,modeltype = "simple_linear"){
     group_by(source) %>%
     mutate(Taxa = strsplit(source, fileName)[[1]][2]) %>%
     mutate(Taxa = gsub("conif_","",Taxa)) %>%
+    mutate(Taxa = gsub("decid_","",Taxa)) %>%
     mutate(Taxa = strsplit(Taxa,"_")[[1]][1])%>%
     ungroup() %>%
     filter(Taxa %in% selectTaxa) %>%
@@ -83,6 +84,7 @@ gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
 
 gamOutputs %>%
   filter(estimate>(-0.1)) %>%
+  filter(std_error<0.05) %>%
   ggplot() +
   geom_density_ridges(aes(x = estimate, y = Taxa, fill=Taxa),
                       rel_min_height = 0.001) +
@@ -150,27 +152,6 @@ allGams <- bind_rows(gamOutputs_mixed,gamOutputs_simple) %>%
 
 ggplot(allGams) +
   geom_point(aes(x = estimate_mixed_linear, y = estimate_simple_linear)) +
-  facet_wrap(~taxa, scales="free") +
-  geom_abline(aes(intercept = 0, slope = 1, linetype = "dashed"))
-
-
-gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
-                                  modeltype = "simple_linear") %>%
-                        add_column(forest = "broadleaf")
-
-gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
-                              modeltype = "simple_linear") %>%
-                        add_column(forest = "conif")
-
-allGams <- bind_rows(gamOutputs_broadleaf,gamOutputs_conif) %>%
-            select(forest, species, Taxa, modeltype, estimate, std_error) %>%
-            pivot_wider(everything(),
-                        names_from="forest", 
-                        values_from=c("estimate","std_error")) %>%
-            janitor::clean_names()
-
-ggplot(allGams) +
-  geom_point(aes(x = estimate_broadleaf, y = estimate_conif)) +
   facet_wrap(~taxa, scales="free") +
   geom_abline(aes(intercept = 0, slope = 1, linetype = "dashed"))
 
