@@ -40,7 +40,15 @@ spTrends <- spTrends %>%
 
 speciesNames <- read.csv("C:/Users/diabow/OneDrive - UKCEH/Projects/General/masterLookup.csv", as.is=TRUE)
 speciesNames$CONCEPT[is.na(speciesNames$CONCEPT)] <- speciesNames$NAME[is.na(speciesNames$CONCEPT)]
-spTrends$Species <- speciesNames$NAME[match(spTrends$species, tolower(speciesNames$CONCEPT))]
+speciesNames$CONCEPT <- tolower(speciesNames$CONCEPT)
+spTrends$Species <- speciesNames$NAME[match(spTrends$species, speciesNames$CONCEPT)]
+
+#our all out species in this file
+spTrends$species[!spTrends$species %in% speciesNames$CONCEPT]
+head(subset(spTrends,!species %in% speciesNames$CONCEPT))
+
+#in these cases, use raw name
+spTrends$Species[is.na(spTrends$Species)] <- spTrends$species[is.na(spTrends$Species)]
 
 #make all capital case
 spTrends$Species <- sapply(spTrends$Species, function(x){
@@ -101,6 +109,7 @@ g2 <- treeDF %>%
 
 cowplot::plot_grid(g1,g2,
                    nrow=2)
+
 ggsave("plots/pantheon_traits.png",width=5.5,height=6)
 
 ### conservation status ####
@@ -123,18 +132,20 @@ spTrends %>%
   ggplot()+
   geom_col(aes(x=Taxa, y = nuSpecies, fill=direction)) +
   ylab("Number of species")
-ggsave("plots/conservation_status.png",width=6,height=3)
 
 ### full list ####
 
 prioritySpecies <- list.files("C:/Users/diabow/OneDrive - UKCEH/Projects/General/Protection",
-                              pattern='.csv') %>%
+                              pattern='.csv', full.names = TRUE) %>%
                     read.csv(.,skip=1)
 
 sum(missingSpecies %in% prioritySpecies$NBN.current.scientific.name)
 
 spTrends$priority <- ifelse(spTrends$Species %in% prioritySpecies$NBN.current.scientific.name,
                             1,0)
+
+#compare the two
+table(spTrends$priority,spTrends$S41)
 
 spTrends %>%
   filter(broad_biotope == "tree-associated") %>%
@@ -145,5 +156,7 @@ spTrends %>%
   ggplot()+
   geom_col(aes(x=Taxa, y = nuSpecies, fill=direction)) +
   ylab("Number of species")
+
+ggsave("plots/conservation_status.png",width=6,height=3)
 
 ### end ######################
