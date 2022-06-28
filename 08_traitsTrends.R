@@ -35,7 +35,7 @@ spTrends %>%
                       rel_min_height = 0.001) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   theme(legend.position = "none") +
-  xlab("Trends")
+  xlab("Long-term distribution trends")
 
 #filter those with large uncertainties
 
@@ -43,7 +43,7 @@ hist(spTrends$sd_change)
 summary(spTrends$sd_change)
 
 spTrends <- spTrends %>%
-              filter(sd_change < 3)
+              filter(sd_change < 2)
 
 ### forest preferences ###################
 
@@ -56,7 +56,8 @@ gamOutputs <- list.files(forestFolder,full.names=TRUE) %>%
                   ungroup() %>%
                   filter(Taxa %in% selectTaxa) %>%
                   mutate(species = tolower(species),
-                         forest_assoc = estimate)
+                         forest_assoc = estimate) %>%
+                  filter(std_error<0.05)
                   
 df <- inner_join(spTrends, gamOutputs, by = c("species","Taxa"))
 
@@ -80,11 +81,6 @@ ggplot(df) +
   geom_vline(xintercept = 0, linetype="dashed") 
 
 ggplot(df) +
-  geom_point(aes(x = forest_assoc, y = mean_change, colour=Taxa)) +
-  geom_hline(yintercept = 0, linetype="dashed") +
-  geom_vline(xintercept = 0, linetype="dashed") 
-
-ggplot(df) +
   geom_bin2d(aes(x = forest_assoc, y = mean_change)) +
   scale_fill_viridis_c("number of species") +
   geom_hline(yintercept = 0, linetype="dashed") +
@@ -94,15 +90,6 @@ ggplot(df) +
   theme(legend.position = "top")
 ggsave("plots/forestVStrends.png",width=5, height=3.5)
 
-df %>%
-  mutate(cluster = case_when(cluster==1 ~ 'open',
-                             cluster==2 ~ 'flat',
-                             cluster==3 ~ 'forest',
-                             cluster==4 ~ 'humped'))%>% 
-ggplot() +
-  geom_bin2d(aes(x = forest_assoc, y = mean_change)) +
-  geom_hline(yintercept = 0, linetype="dashed") +
-  geom_vline(xintercept = 0, linetype="dashed") 
 
 ### cluster differences ############################
 
@@ -131,10 +118,12 @@ ggplot(spTrends)+
   facet_wrap(~cluster)
 
 spTrends %>%
-  mutate(cluster = case_when(cluster==1 ~ 'open',
-                             cluster==2 ~ 'flat',
-                             cluster==3 ~ 'forest',
-                             cluster==4 ~ 'humped')) %>%
+  mutate(cluster = case_when(cluster==1 ~ 'flat',
+                             cluster==2 ~ 'humped',
+                             cluster==3 ~ 'open',
+                             cluster==4 ~ 'forest')) %>%
+  mutate(cluster = factor(cluster, 
+                          levels=c("forest","humped","flat","open"))) %>%
 ggplot() +
   geom_violin(aes(x = cluster, y = mean_change), draw_quantiles = c(0.25,0.5,0.75)) +
   geom_hline(yintercept = 0, linetype="dashed") +
@@ -176,10 +165,10 @@ ggplot(rel_spTrends) +
 
 #not made relative
 spTrends %>%
-  mutate(cluster = case_when(cluster==1 ~ 'open',
-                             cluster==2 ~ 'flat',
-                             cluster==3 ~ 'forest',
-                             cluster==4 ~ 'humped')) %>%
+  mutate(cluster = case_when(cluster==1 ~ 'flat',
+                             cluster==2 ~ 'humped',
+                             cluster==3 ~ 'open',
+                             cluster==4 ~ 'forest')) %>%
   mutate(cluster = factor(cluster, 
                           levels=c("forest","humped","flat","open"))) %>%
 ggplot() +
@@ -188,9 +177,9 @@ ggplot() +
   geom_hline(yintercept = 0, linetype="dashed") +
   coord_flip() +
   scale_fill_brewer(palette = "RdYlGn", direction =-1) +
-  ylab("Mean species growth rate") +
+  ylab("Species growth rate") +
   theme(legend.position = "top")
 
-ggsave("plots/forest_species_vs_cluster.png",width=5, height=7)
+ggsave("plots/forest_species_vs_cluster.png",width=6, height=7)
 
 ### end ##################################
