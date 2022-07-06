@@ -6,10 +6,10 @@ library(tidyverse)
 
 reLabel <- function(cluster){
   
-  cluster = ifelse(cluster==1, "prefers open",
-                   ifelse(cluster==2, "prefers high forest",
-                          ifelse(cluster==3, "prefers higher forest",
-                                 ifelse(cluster==4, "prefers lower forest",cluster))))
+  cluster = ifelse(cluster==1, "flat",
+                   ifelse(cluster==2, "humped",
+                          ifelse(cluster==3, "open",
+                                 ifelse(cluster==4, "forest",cluster))))
   
   return(cluster)
   
@@ -21,7 +21,6 @@ msiTS <- list.files("outputs/msi", full.names=TRUE) %>%
             str_subset("msi_timeseries") %>%
             map_dfr(readRDS) %>%
             mutate(cluster = reLabel(cluster))
-
 
 ggplot(msiTS)+
   geom_point(aes(x=year, y=msi, colour=cluster))+
