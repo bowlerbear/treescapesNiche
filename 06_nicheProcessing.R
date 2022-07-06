@@ -179,4 +179,31 @@ ggplot(allGams) +
 
 #mostly correlated
 
+### occ-det models ##############################################
+
+modelFolder <- "outputs/forestAssociations/broadleaf/occuModels"
+
+carabidMods <- list.files(modelFolder,full.names=TRUE) %>%
+                  str_subset("occuGam_forestcover") %>%
+                  set_names() %>%
+                  map_dfr(readRDS, .id="source") %>%
+                  group_by(source) %>%
+                  mutate(species = strsplit(source,"_")[[1]][4]) %>%
+                  mutate(species = gsub(".rds","", species)) %>%
+                  ungroup() %>%
+                  rename(estimate_occdet = estimate) %>%
+                  filter(para == "decidForest")
+
+gamOutputs <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
+                        modeltype = "simple_linear") %>%
+              filter(Taxa == "Carabids") %>%
+                mutate(species = gsub("Col_", "", species))
+
+compareOutput <- inner_join(carabidMods, gamOutputs, by = "species")
+
+
+qplot(estimate_occdet, estimate, data=compareOutput)
+#bit different
+cor(compareOutput$estimate_occdet,compareOutput$estimate)
+
 ### end ##########################################################
