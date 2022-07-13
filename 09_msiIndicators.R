@@ -11,6 +11,9 @@ reLabel <- function(cluster){
                           ifelse(cluster==3, "open",
                                  ifelse(cluster==4, "forest",cluster))))
   
+  cluster = factor(cluster, 
+                   levels=c("forest","humped","flat","open"))
+  
   return(cluster)
   
 }
@@ -26,7 +29,7 @@ ggplot(msiTS)+
   geom_point(aes(x=year, y=msi, colour=cluster))+
   geom_line(aes(x=year, y=msi, colour=cluster))+
   geom_ribbon(aes(x=year, ymin=lowerCI, ymax=upperCI, fill=cluster),alpha=0.5)+
-  facet_wrap(~taxon, scales="free")+
+  facet_wrap(~taxon)+
   theme_classic() +
   scale_colour_brewer(palette = "RdYlGn", direction =-1) +
   scale_fill_brewer(palette = "RdYlGn", direction =-1) +
