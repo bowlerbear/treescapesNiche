@@ -26,10 +26,10 @@ taxa_data <- taxa_data %>%
 
 ### filter #########################################
 
-#exclude Scotland and northern island
-England <- UK_countries %>%
+#exclude northern island - little data there
+GB <- UK_countries %>%
   st_as_sf() %>%
-  filter(COUNTRY %in% c("England","Wales")) %>%
+  filter(COUNTRY %in% c("England","Wales","Scotland")) %>%
   st_transform(crs = 27700) %>%
   bind_rows() %>%
   st_union()
@@ -39,7 +39,7 @@ taxa_data_spatial <- taxa_data %>%
 
 #filter on non-spatial data
 taxa_data <- taxa_data %>%
-  filter(st_intersects(taxa_data_spatial, England, sparse = FALSE)[,1]) %>%
+  filter(st_intersects(taxa_data_spatial, GB, sparse = FALSE)[,1]) %>%
   filter(YEAR > 1979)
 
 message(paste('Number of records passing filter',nrow(taxa_data)))
