@@ -9,6 +9,7 @@ require(sf)
 ### get data ###########################################
 
 dataDir <- "W:/PYWELL_SHARED/Pywell Projects/BRC/Charlie/1.c. New Model Rerun/1. Data/Cleaned Datasets"
+
 load(paste(dataDir,"Carabids_170316_Cleaned_Data.rdata",sep="/"))
 
 ### coords ############################################
