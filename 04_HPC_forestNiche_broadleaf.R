@@ -25,22 +25,20 @@
 library(BRCmap, lib.loc = "/home/users/diabow/Rlibraries") 
 library(tidyverse)
 library(sf)
+library(mgcv)
+library(gratia,lib.loc = "/home/users/diabow/Rlibraries" )
 
-### local directories #################################
+### directories #################################
 
-# dataDir <- "W:/PYWELL_SHARED/Pywell Projects/BRC/Charlie/1.c. New Model Rerun/1. Data/Cleaned Datasets"
-# 
-# inputDir <- "inputs"
-# 
-# outputDir <- "outputs"
+setwd("./ConnectedTreescapes")
 
-### HPC directories #################################
+dataDir <- "W:/PYWELL_SHARED/Pywell Projects/BRC/Charlie/1.c. New Model Rerun/1. Data/Cleaned Datasets"
 
 dataDir <- "/gws/nopw/j04/ceh_generic/rboyd/inputs/species_data"
 
-inputDir <- "/home/users/diabow/ConnectedTreescapes/inputs"
+inputDir <- "./inputs"
 
-outputDir <- "/home/users/diabow/ConnectedTreescapes/outputs"
+outputDir <- "./outputs"
 
 ### choose taxa #####################################
 
@@ -52,6 +50,7 @@ length(taxaFiles)
 task.id = as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
 
 mytaxa <- taxaFiles[task.id]
+#moths are 22 on HPC dir
 
 ### load data ########################################
 
@@ -63,6 +62,8 @@ load(paste(dataDir, taxaFile,sep="/"))
 
 message('Data has been read in')
 message(paste('Taxa is:',mytaxa))
+
+head(taxaFile)
 
 ###standardize labels ################################
 
@@ -123,7 +124,8 @@ taxa_data$Species <- taxa_data$CONCEPT
 speciesSummary <- taxa_data %>%
   group_by(Species) %>%
   summarise(nuRecs = length(Species),
-            nuYears = length(unique(YEAR))) %>%
+            nuYears = length(unique(YEAR)),
+            nuSites = length(unique(TO_GRIDREF))) %>%
   ungroup() %>%
   arrange(desc(nuRecs))
 
@@ -132,6 +134,13 @@ commonSpecies <- speciesSummary %>%
   filter(nuRecs > 50) %>%
   pull(Species) %>%
   as.character()
+
+#with moths, there is a problem with "Lep_8026", remove it
+commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_8026")]
+commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_7243")]
+commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_6856")]
+commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_5935")]
+commonSpecies
 
 #report some feedback
 message(paste('Total number of species:',nrow(speciesSummary)))
@@ -192,7 +201,7 @@ visit_data$LL <- ifelse(visit_data$nuSpecies==1,"single",
 
 table(visit_data$LL)
 
-### subsample visits #################################
+### cap repeat visits ##################################
 
 #reduce sampling at sites with many visits in the same year
 
@@ -266,78 +275,78 @@ occMatrix[occMatrix > 1] <- 1
 #check things align
 all(row.names(occMatrix) == visit_data$visitID)
 
-### basic glm #############################################
-
-# I call it glm because we asssume a linear effect of forest cover
-# the gam model is only used to model space
-
-#general function
-fitBasicGam <- function(myspecies){
-
-  #check all aligns and add in species
-  all(row.names(occMatrix) == visit_data$visitID)
-  visit_data$Species <- occMatrix[,myspecies]
-
-  #fit gam and pull out forest cover effect
-  require(mgcv)
-  gam1 <- gam(Species ~ decidForest + yday + yday2 + Year + LL + s(X,Y),
-              family = "binomial",
-              data = visit_data)
-
-  summary(gam1)$p.table[2,]
-
-}
-
-#apply function
-gamOutput <- commonSpecies %>%
-  map_dfr(fitBasicGam) %>%
-  add_column(Species = commonSpecies) %>%
-  arrange(desc(Estimate)) %>%
-  janitor::clean_names()
-
-saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_glm_subset_random_decid_",mytaxa,".rds"))
-
-message('Basic glm done')
-
-### niche shape ###########################################
-
-hist(visit_data$decidForest) #most of the data is
-
-fitGamNiche <- function(myspecies){
-
-  #check all aligns and add in species
-  all(row.names(occMatrix) == visit_data$visitID)
-  visit_data$Species <- occMatrix[,myspecies]
-
-  #fit gam and pull out forest cover effect
-  require(mgcv)
-  gam1 <- gam(Species ~ s(decidForest,k=3) + yday + yday2 + Year + LL + s(X,Y),
-              family = "binomial",
-              data = visit_data)
-
-  #predict the gam effect of forest cover
-  newdata = data.frame(decidForest = seq(0,100,by=1),
-                       yday = median(visit_data$yday),
-                       yday2 = median(visit_data$yday2),
-                       X = median(visit_data$X),
-                       Y = median(visit_data$Y),
-                       LL = "long",
-                       Year = median(visit_data$Year))
-
-  newdata$preds <- predict(gam1,newdata, type="response")
-  newdata$preds_se <- predict(gam1,newdata, se.fit=TRUE, type="response")$se.fit
-  newdata$Species <- myspecies
-
-  return(newdata)
-
-}
-
-gamOutput <- commonSpecies %>%
-  map_dfr(fitGamNiche)
-
-saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gam_shape_subset_random_decid_",mytaxa,".rds"))
-
-message('Basic gam done')
+# ### basic glm #############################################
+# 
+# # I call it glm because we asssume a linear effect of forest cover
+# # the gam model is only used to model space
+# 
+# #general function
+# fitBasicGam <- function(myspecies){
+# 
+#   #check all aligns and add in species
+#   all(row.names(occMatrix) == visit_data$visitID)
+#   visit_data$Species <- occMatrix[,myspecies]
+# 
+#   #fit gam and pull out forest cover effect
+#   require(mgcv)
+#   gam1 <- gam(Species ~ decidForest + yday + yday2 + Year + LL + s(X,Y),
+#               family = "binomial",
+#               data = visit_data)
+# 
+#   summary(gam1)$p.table[2,]
+# 
+# }
+# 
+# #apply function
+# gamOutput <- commonSpecies %>%
+#   map_dfr(fitBasicGam) %>%
+#   add_column(Species = commonSpecies) %>%
+#   arrange(desc(Estimate)) %>%
+#   janitor::clean_names()
+# 
+# saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_glm_subset_random_decid_",mytaxa,".rds"))
+# 
+# message('Basic glm done')
+# 
+# ### niche shape ###########################################
+# 
+# hist(visit_data$decidForest) #most of the data is
+# 
+# fitGamNiche <- function(myspecies){
+# 
+#   #check all aligns and add in species
+#   all(row.names(occMatrix) == visit_data$visitID)
+#   visit_data$Species <- occMatrix[,myspecies]
+# 
+#   #fit gam and pull out forest cover effect
+#   require(mgcv)
+#   gam1 <- gam(Species ~ s(decidForest,k=3) + yday + yday2 + Year + LL + s(X,Y),
+#               family = "binomial",
+#               data = visit_data)
+# 
+#   #predict the gam effect of forest cover
+#   newdata = data.frame(decidForest = seq(0,100,by=1),
+#                        yday = median(visit_data$yday),
+#                        yday2 = median(visit_data$yday2),
+#                        X = median(visit_data$X),
+#                        Y = median(visit_data$Y),
+#                        LL = "long",
+#                        Year = median(visit_data$Year))
+# 
+#   newdata$preds <- predict(gam1,newdata, type="response")
+#   newdata$preds_se <- predict(gam1,newdata, se.fit=TRUE, type="response")$se.fit
+#   newdata$Species <- myspecies
+# 
+#   return(newdata)
+# 
+# }
+# 
+# gamOutput <- commonSpecies %>%
+#   map_dfr(fitGamNiche)
+# 
+# saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gam_shape_subset_random_decid_",mytaxa,".rds"))
+# 
+# message('Basic gam done')
 
 ### basic gamm4 ###########################################
 
@@ -348,10 +357,10 @@ fitGammNiche <- function(myspecies){
   visit_data$Species <- occMatrix[,myspecies]
 
   #fit gam and pull out forest cover effect
-  require(gamm4)
-  gamm1 <- gamm4(Species ~ decidForest + yday + yday2 + LL + s(X,Y),
+  require(mgcv)
+  gamm1 <- gamm(Species ~ decidForest + LL + yday + yday2 + s(X,Y),
                  family = "binomial",
-                 random = ~ (1|Year),
+                 random = list(Year=~1),
                  data = visit_data)
 
   summary(gamm1$gam)$p.table[2,]
@@ -365,7 +374,7 @@ gamOutput <- commonSpecies %>%
   arrange(desc(Estimate)) %>%
   janitor::clean_names()
 
-saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm4_subset_random_decid_",mytaxa,".rds"))
+saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_subset_random_decid_",mytaxa,".rds"))
 
 message('Gamm done')
 
@@ -378,9 +387,9 @@ fitGammNiche <- function(myspecies){
   visit_data$Species <- occMatrix[,myspecies]
 
   #fit gam and pull out forest cover effect
-  require(gamm4)
-  gamm1 <- gamm4(Species ~ s(decidForest, k=3) + yday + yday2 + LL + s(X,Y),
-                 random = ~ (1|Year),
+  require(mgcv)
+  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL + yday + yday2 + s(X,Y),
+                 random = list(Year=~1),
                  family = "binomial",
                  data = visit_data)
 
@@ -393,8 +402,8 @@ fitGammNiche <- function(myspecies){
                        LL = "long",
                        Year = median(visit_data$Year))
 
-  newdata$preds <- predict(gamm1,newdata, type="response") # check this bit
-  newdata$preds_se <- predict(gamm1,newdata, se.fit=TRUE, type="response")$se.fit
+  newdata$preds <- predict(gamm1$gam,newdata, type="response")
+  newdata$preds_se <- predict(gamm1$gam,newdata, se.fit=TRUE, type="response")$se.fit
   newdata$Species <- myspecies
 
   return(newdata)
@@ -402,13 +411,44 @@ fitGammNiche <- function(myspecies){
 }
 
 gamOutput <- commonSpecies %>%
-  map_dfr(fitBasicGam) %>%
-  add_column(Species = commonSpecies) %>%
-  arrange(desc(Estimate)) %>%
+  map_dfr(fitGammNiche) %>%
   janitor::clean_names()
 
-saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm4_shape_subset_random_decid_",mytaxa,".rds"))
+saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_shape_subset_random_decid_",mytaxa,".rds"))
 
 message('Gamm shape done')
+
+### gam derivatives #####################################
+
+fitGammNiche <- function(myspecies){
+  
+  #check all aligns and add in species
+  all(row.names(occMatrix) == visit_data$visitID)
+  visit_data$Species <- occMatrix[,myspecies]
+  
+  #fit gam and pull out forest cover effect
+  require(mgcv)
+  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL + yday + yday2 + s(X,Y),
+                random = list(Year=~1),
+                family = "binomial",
+                data = visit_data)
+  
+  require(gratia)
+  deriv1 <- derivatives(gamm1$gam, type = "central", term ="s(decidForest)", order=1) %>%
+    add_column(Species = myspecies,
+               edf = summary(gamm1$gam)$edf[1],
+               p = summary(gamm1$gam)$s.table[1,4])
+  
+  return(deriv1)
+  
+}
+
+gamOutput <- commonSpecies %>%
+  map_dfr(fitGammNiche) %>%
+  janitor::clean_names()
+
+saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_derivatives_subset_random_decid_",mytaxa,".rds"))
+
+message('Gamm derivatives done')
 
 ### end #######################################################
