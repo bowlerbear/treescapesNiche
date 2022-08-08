@@ -316,7 +316,8 @@ mydata <- data.frame(mydata, cluster = fit$clustering)
 table(mydata$cluster)
 
 #get silhouette values
-ss <- silhouette(mydata$cluster, dist(mydata, method="manhattan"))
+ss <- silhouette(mydata$cluster, dist(mydata[,-which(names(mydata)=="cluster")],
+                                      method="manhattan"))
 mydata$sil_width <- ss[,"sil_width"]
 
 #add back onto the gamOutput
@@ -329,13 +330,13 @@ nrow(gamOutputs)
 #drop those whose siloutte width was negative
 gamOutputs <- gamOutputs %>%
   filter(sil_width >0.05)
-nrow(gamOutputs)#loose 0%
+nrow(gamOutputs)#loose 15%
 
 #better clustering!!!
 tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
 tapply(gamOutputs$sil_width, gamOutputs$cluster, min)
 #1         2         3         4 
-#0.8817067 0.9465818 0.8045520 0.8061120 
+#0.3172022 0.6660058 0.2711170 0.3639139 
 
 #species within
 gamOutputs %>%
@@ -373,10 +374,6 @@ gamOutputs %>%
   xlab("Decid forest cover %") + ylab("Occupancy")+
   facet_wrap(~cluster) +
   theme_classic()
-#flat = 1
-#humped = 2
-#open = 3
-#forest = 4
 ggsave("plots/clustering_all_deriv_means.png")
 
 #how each taxa is distributed in each cluster
@@ -406,7 +403,6 @@ saveRDS(., file="outputs/clustering/deriv_classification_all.rds")
 
 corr_clustering <- readRDS("outputs/clustering/corr_classification_all.rds")
 deriv_clustering <- readRDS("outputs/clustering/deriv_classification_all.rds")
-
 all_clustering <- inner_join(corr_clustering, deriv_clustering, by="Species")
 
 table(all_clustering$cluster.x, all_clustering$cluster.y)
@@ -434,6 +430,16 @@ all_clustering %>%
 #many are put in the flat category based on the derivs 
 #but they seem to only increase slightly with forest, so seems ok
 
+#corr - 3 is open
+all_clustering %>%
+  filter(cluster.x=="3") %>%
+  left_join(gamOutputs) %>%
+  ggplot()+
+  geom_line(aes(x = decidForest, y = preds, groups = Species))+
+  xlab("Decid forest cover %") + ylab("Occupancy")+
+  facet_wrap(~cluster.y)
+#most put in flat category based on derivs
+
 #corr - 4 is humped
 all_clustering %>%
   filter(cluster.x=="4") %>%
@@ -445,6 +451,16 @@ all_clustering %>%
 #most also humped according to the derivatives
 #few are put into the forest cover based on derivs 
 #but these are only slighty humped
+
+#deriv - 1 is open
+all_clustering %>%
+  filter(cluster.y=="1") %>%
+  left_join(gamOutputs) %>%
+  ggplot()+
+  geom_line(aes(x = decidForest, y = preds, groups = Species))+
+  xlab("Decid forest cover %") + ylab("Occupancy")+
+  facet_wrap(~cluster.x)
+#most put in open
 
 #deriv - 2 is flat
 all_clustering %>%
@@ -464,23 +480,7 @@ all_clustering %>%
   geom_line(aes(x = decidForest, y = preds, groups = Species))+
   xlab("Decid forest cover %") + ylab("Occupancy")+
   facet_wrap(~cluster.x)
-
-# a few are U-shaped??
-outliers <- all_clustering$Species[all_clustering$cluster.y==3 &
-                         all_clustering$cluster.x==1]
-
-#check pattern without these
-all_clustering %>%
-  filter(cluster.y=="3") %>%
-  left_join(gamOutputs) %>%
-  ggplot()+
-  geom_line(aes(x = decidForest, y = preds, groups = Species))+
-  xlab("Decid forest cover %") + ylab("Occupancy")+
-  facet_wrap(~Taxa)
-
-deriv_clustering %>%
-  filter(!Species %in% outliers) %>%
-saveRDS(.,"outputs/clustering/deriv_classification_all.rds")
+#all in category 2 of corr
 
 #deriv - 4 is humped
 all_clustering %>%
@@ -490,7 +490,7 @@ all_clustering %>%
   geom_line(aes(x = decidForest, y = preds, groups = Species))+
   xlab("Decid forest cover %") + ylab("Occupancy")+
   facet_wrap(~cluster.x)
-#humped seems reasonable
+#humped seems reasonable for all
 
 ### end #############################################
 
