@@ -217,15 +217,16 @@ ggplot(allGams) +
 ### compare decid vs conif #######################################
 
 gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
-                                  modeltype = "simple_linear") %>%
+                                  modeltype = "mixed_linear") %>%
                                   add_column(forest = "broadleaf")
 
 gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
-                              modeltype = "simple_linear") %>%
+                              modeltype = "mixed_linear") %>%
                               add_column(forest = "conif")
 
+
 allGams <- bind_rows(gamOutputs_broadleaf,gamOutputs_conif) %>%
-  select(forest, species, Taxa, modeltype, estimate, std_error) %>%
+  dplyr::select(forest, species, Taxa, modeltype, estimate, std_error) %>%
   pivot_wider(everything(),
               names_from="forest", 
               values_from=c("estimate","std_error")) %>%
@@ -242,7 +243,7 @@ ggplot(allGams) +
 
 ### forest special ##############################################
 
-#run previous section
+#run code in previous section
 
 allGams$estimate_broadleafS <- ifelse(allGams$estimate_broadleaf<0,0.0001,
                                      allGams$estimate_broadleaf)
@@ -252,9 +253,14 @@ allGams$estimate_conifS <- ifelse(allGams$estimate_conif<0,0.0001,
 
 allGams$ForestSpecial <- log(allGams$estimate_broadleafS/allGams$estimate_conifS)
 
+summary(allGams$ForestSpecial)
+
+subset(allGams, ForestSpecial >6)
+
+subset(allGams, ForestSpecial < (-38))
+
 allGams %>%
-  select(species, taxa, ForestSpecial) %>%
-  saveRDS(., file="outputs/forestAssociations/forestSpecial_simple_linear.rds")
+  saveRDS(., file="outputs/forestAssociations/forestSpecial_mixed_linear.rds")
 
 ggplot(allGams) +
   geom_point(aes(x = estimate_broadleaf, y = estimate_conif, 
