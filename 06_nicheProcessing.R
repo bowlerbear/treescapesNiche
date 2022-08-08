@@ -1,4 +1,4 @@
-#outputs of script - forestNiche.R
+#outputs of script - 04_forestNiche.R
 
 library(tidyverse)
 library(ggridges)
@@ -9,7 +9,7 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflie
                  "Ladybirds","LeafSeedBeetles","Molluscs","Moths",
                  "Orthoptera","PlantBugs","ShieldBugs",
                  "Soldierflies","Spiders","Trichoptera","Wasps","Weevils")
-
+#23
 
 ### choose models ###########################
 
@@ -51,7 +51,7 @@ getModels <- function(modelFolder,modeltype = "simple_linear"){
     fileName <- "gamOutput_gamm_shape_subset_random_"
   }
   
-  list.files(modelFolder,full.names=TRUE) %>%
+  temp <- list.files(modelFolder,full.names=TRUE) %>%
     str_subset(fileName) %>%
     set_names() %>%
     map_dfr(readRDS, .id="source") %>%
@@ -65,6 +65,19 @@ getModels <- function(modelFolder,modeltype = "simple_linear"){
     mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
                           TRUE ~ as.character(Taxa)))  %>%
     add_column(modeltype = modeltype)
+  
+  #fix names
+  
+  if("Species" %in% names(temp)){
+    temp <- temp %>% rename(Species = species)
+  }
+  
+  if("decid_forest" %in% names(temp)){
+    temp <- temp %>% rename(decidForest = decid_forest)
+    
+  }
+  
+  return(temp)
 }
 
 ### linear associations #####################
@@ -85,7 +98,7 @@ taxaSummary <- gamOutputs %>%
 gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
 
 gamOutputs %>%
-  filter(estimate>(-0.1)) %>%
+  #filter(estimate>(-0.1)) %>%
   filter(std_error<0.05) %>%
   ggplot() +
   geom_density_ridges(aes(x = estimate, y = Taxa, fill=Taxa),
@@ -129,7 +142,9 @@ gamOutputs <- getModels(modelFolder,modeltype = "mixed_linear")
 saveRDS(gamOutputs, file="outputs/forestAssociations/broadleafAssocations_mixed_linear.rds")
 
 #what taxa do we have?
-sort(unique(gamOutputs$Taxa))#all taxa
+sort(unique(gamOutputs$Taxa))#all present for broadleaf
+sort(unique(gamOutputs$Taxa))#all present for conif
+selectTaxa[!selectTaxa %in%  sort(unique(gamOutputs$Taxa))]
 
 #order taxa by median preferece
 taxaSummary <- gamOutputs %>%
@@ -140,7 +155,7 @@ taxaSummary <- gamOutputs %>%
 gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
 
 gamOutputs %>%
-  filter(estimate>(-0.1)) %>%
+  #filter(estimate>(-0.1)) %>%
   filter(std_error<0.05) %>%
   ggplot() +
   geom_density_ridges(aes(x = estimate, y = Taxa, fill=Taxa),
@@ -152,9 +167,11 @@ gamOutputs %>%
 ### gam shape/gamm ###############################################
 
 gamOutputs <- getModels(modelFolder,modeltype = "mixed_shape")
+#missing conif: Bees, E&D, Moths, Trichoptera
 
 #what taxa do we have?
 sort(unique(gamOutputs$Taxa))
+selectTaxa[!selectTaxa %in%  sort(unique(gamOutputs$Taxa))]
 
 speciesMax <- gamOutputs %>%
   group_by(Species) %>%
