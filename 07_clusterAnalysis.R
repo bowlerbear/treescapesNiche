@@ -2,6 +2,7 @@
 
 library(tidyverse)
 library(cluster)
+library(TSclust)
 
 selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflies",
                  "Dragonflies","E&D","Ephemeroptera","Gelechiids","Hoverflies",
@@ -30,7 +31,7 @@ modelFolder <- "outputs/forestAssociations/broadleaf"
 ### all taxa #########################################
 
 gamOutputs <- list.files(modelFolder,full.names=TRUE) %>%
-  str_subset("gamOutput_gam_shape_subset_random_") %>%
+  str_subset("gamOutput_gamm_shape_subset_random_") %>%
   set_names() %>%
   map_dfr(readRDS, .id="source") %>%
   group_by(source) %>%
@@ -38,7 +39,9 @@ gamOutputs <- list.files(modelFolder,full.names=TRUE) %>%
   ungroup() %>%
   filter(Taxa %in% selectTaxa) %>%
   mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
-                          TRUE ~ as.character(Taxa))) 
+                          TRUE ~ as.character(Taxa)))  %>%
+  rename(Species = species,
+         decidForest = decid_forest)
 
 #Summarize data for each species
 gamSummary <- gamOutputs %>%
@@ -47,25 +50,23 @@ gamSummary <- gamOutputs %>%
             sdPreds = sd(preds))
 
 #what prop of species show no variation
-mean(gamSummary$sdPreds==0) # few!!
+mean(gamSummary$sdPreds==0) # few!! 10 species
 
 #remove species were the sd is 0 - prob too rare to be modelled
 gamOutputs <- gamOutputs %>%
   filter(Species %in% gamSummary$Species[gamSummary$sdPreds!=0])
 
-
 #remove species with large sd
-mean(gamSummary$sdPreds>0.05) # quite a few...
+quantile(gamSummary$sdPreds, 0.95)
+mean(gamSummary$sdPreds>0.1)
 gamOutputs <- gamOutputs %>%
-  filter(Species %in% gamSummary$Species[gamSummary$sdPreds<0.05])
+  filter(Species %in% gamSummary$Species[gamSummary$sdPreds<0.1])
 nrow(gamOutputs)
 
 #### pam #########################################
 
 #clusters both the height and the shape of the niche
 #scale them relative to mean occupancy
-
-library(cluster)
 
 #put into a matrix
 speciesResponses <- reshape2::acast(gamOutputs,
@@ -76,11 +77,8 @@ dim(speciesResponses)
 
 #scale each column 
 mydata <- apply(speciesResponses, 2, function(x){
-  boot::logit(x) - median(boot::logit(x))
+  boot::logit(x)
 })
-
-#keep those with variation 
-# mydata <- mydata[,!is.nan(colMeans(mydata))]
 
 #transpose
 mydata <- t(mydata)
@@ -93,13 +91,31 @@ plot(1:15, wss, type="b", xlab="Number of Clusters",
      ylab="Within groups sum of squares")
 
 #pick one
-fit <- pam(mydata, 5) # cluster solution
+fit <- pam(mydata, 4, metric="manhattan") # cluster solution
 mydata <- data.frame(mydata, cluster = fit$clustering)
 table(mydata$cluster)
 
+#get silhouette values
+ss <- silhouette(mydata$cluster, 
+                 dist(mydata[,-which(names(mydata)=="cluster")],
+                      method = "manhattan"))
+mydata$sil_width <- ss[,"sil_width"]
+
+
 #add back onto the gamOutput
-gamOutputs$cluster <- mydata$cluster[match(gamOutputs$Species,
-                                              row.names(mydata))]
+gamOutputs <-  mydata %>%
+                select(cluster, sil_width) %>%
+                add_column(Species = row.names(mydata)) %>%
+                inner_join(.,gamOutputs)
+nrow(gamOutputs)
+#drop those whose siloutte width was negative
+gamOutputs <- gamOutputs %>%
+                filter(sil_width >0.05)
+nrow(gamOutputs)#loose 10%
+
+tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
+#1         2         3         4 
+#0.4772783 0.4879862 0.4128816 0.3617228
 
 #species within
 gamOutputs %>%
@@ -153,25 +169,37 @@ gamOutputs %>%
 
 #this one captures the shape but not the magnitude of change
 
-library(TSclust)
-
-myTS <- reshape2::acast(gamOutputs,
+mydata <- reshape2::acast(gamOutputs,
                         Species ~ decidForest,
                         value.var = "preds")
 
 #correlation-based distance
-IP.dis <- diss(myTS, "COR")
-fit <- hclust(IP.dis)
-plot(fit)
+IP.dis <- diss(mydata, "COR")
+fit <- pam(IP.dis, k = 4, metric="manhattan")
 
-#choose clusters
-fit <- pam(IP.dis, k = 4)
+#add on to response dataframe
 mydata <- data.frame(mydata, cluster = fit$clustering)
 table(mydata$cluster)
 
+#get silhouette values
+ss <- silhouette(mydata$cluster, IP.dis)
+mydata$sil_width <- ss[,"sil_width"]
+
 #add back onto the gamOutput
-gamOutputs$cluster <- mydata$cluster[match(gamOutputs$Species,
-                                           row.names(mydata))]
+gamOutputs <-  mydata %>%
+  select(cluster, sil_width) %>%
+  add_column(Species = row.names(mydata)) %>%
+  inner_join(.,gamOutputs)
+nrow(gamOutputs)
+
+#drop those whose siloutte width was negative
+gamOutputs <- gamOutputs %>%
+  filter(sil_width >0.05)
+nrow(gamOutputs)#loose 10%
+
+tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
+#1         2         3         4 
+#0.3889281 0.8118945 0.6423463 0.5319811
 
 #species within
 gamOutputs %>%
@@ -194,6 +222,14 @@ gamOutputs %>%
 
 ggsave("plots/clustering_all_corr_means.png")
 
+#all those in a specific clusters
+gamOutputs %>%
+  filter(cluster==2) %>%
+  ggplot()+
+  geom_line(aes(x = decidForest, y = preds, groups = Species))+
+  xlab("Decid forest cover %") + ylab("Occupancy")+
+  facet_wrap(~Taxa)
+
 #how each taxa is distributed in each cluster
 gamOutputs %>%
   group_by(Taxa, cluster) %>%
@@ -212,53 +248,83 @@ saveRDS(., file="outputs/clustering/corr_classification_all.rds")
 
 #### derivatives ######################################
 
-#get derivatives of the fitted gam?
-#best do this within the model code
+# posthoc
 
 library(gratia)
 library(mgcv)
 
 getDerivatives <- function(myspecies){
-  
+
   test <- gamOutputs %>%
-    filter(Species == myspecies) 
-  
-  mod <- gam(preds ~ s(decidForest), data = test, 
+    filter(Species == myspecies)
+
+  mod <- gam(preds ~ s(decidForest), data = test,
              method = "REML")
-  
+
   deriv1 <- derivatives(mod, type = "central", order=1) %>%
     add_column(Species = myspecies)
-  
-  return(deriv1)
-  
-}
 
+  return(deriv1)
+
+}
 
 allDerivatives <- lapply(sort(unique(gamOutputs$Species)), function(x){
   print(x)
   getDerivatives(x)
 }) %>%
-  reduce(rbind)
+   reduce(rbind)
+
+# derivatives taken directly from fitted model
+
+allDerivatives <- list.files(modelFolder,full.names=TRUE) %>%
+  str_subset("gamm_derivatives") %>%
+  set_names() %>%
+  map_dfr(readRDS, .id="source") %>%
+  group_by(source) %>%
+  mutate(Taxa = strsplit(source, "gamm_derivatives_subset_random_decid_")[[1]][2]) %>%
+  mutate(Taxa = strsplit(Taxa,"_")[[1]][1]) %>%
+  ungroup() %>%
+  filter(Taxa %in% selectTaxa) %>%
+  mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
+                          TRUE ~ as.character(Taxa)))
+#filter extremes?? 
+temp <- subset(allDerivatives, deriv)
+
+#continue here:
 
 #pam on them
-speciesResponses <- reshape2::acast(allDerivatives,
+mydata <- reshape2::acast(allDerivatives,
                                     data ~ Species,
                                     value.var = "derivative")
-
-mydata <- speciesResponses
 
 #transpose
 mydata <- t(mydata)
 
 #clusters
-fit <- pam(mydata, 4) # cluster solution
+fit <- pam(mydata, 4, metric="manhattan")
+
+#add on to response dataframe
 mydata <- data.frame(mydata, cluster = fit$clustering)
 table(mydata$cluster)
-#most in one cluster
+
+#get silhouette values
+ss <- silhouette(mydata$cluster, dist(mydata, method="manhattan"))
+mydata$sil_width <- ss[,"sil_width"]
 
 #add back onto the gamOutput
-gamOutputs$cluster <- mydata$cluster[match(gamOutputs$Species,
-                                          row.names(mydata))]
+gamOutputs <-  mydata %>%
+  select(cluster, sil_width) %>%
+  add_column(Species = row.names(mydata)) %>%
+  inner_join(.,gamOutputs)
+nrow(gamOutputs)
+
+#drop those whose siloutte width was negative
+gamOutputs <- gamOutputs %>%
+  filter(sil_width >0.05)
+nrow(gamOutputs)#loose 0%
+
+#better clustering!!!
+tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
 
 #species within
 gamOutputs %>%
