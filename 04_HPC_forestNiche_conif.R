@@ -358,7 +358,7 @@ fitGammNiche <- function(myspecies){
                  family = "binomial",
                 random = list(Year=~1),
                  data = visit_data)
-
+  
   summary(gamm1$gam)$p.table[2,]
 
 }
