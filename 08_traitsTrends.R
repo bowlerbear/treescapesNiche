@@ -18,7 +18,7 @@ trendsFolder <- "outputs/speciesTrends"
 #forest associations
 forestFolder <- "outputs/forestAssociations/broadleaf"
 
-### trends ##############################
+### species trends ##############################
 
 spTrends <- list.files(trendsFolder, full.names = TRUE) %>%
               set_names() %>%
@@ -45,10 +45,10 @@ summary(spTrends$sd_change)
 spTrends <- spTrends %>%
               filter(sd_change < 2)
 
-### forest preferences ###################
+### cont forest preferences ###################
 
 gamOutputs <- list.files(forestFolder,full.names=TRUE) %>%
-                  str_subset("gamOutput_glm_subset_random_") %>%
+                  str_subset("gamOutput_gamm_subset_random_") %>%
                   set_names() %>%
                   map_dfr(readRDS, .id="source") %>%
                   group_by(source) %>%
@@ -57,16 +57,11 @@ gamOutputs <- list.files(forestFolder,full.names=TRUE) %>%
                   filter(Taxa %in% selectTaxa) %>%
                   mutate(species = tolower(species),
                          forest_assoc = estimate) %>%
-                  filter(std_error<0.05)
-                  
+                  filter(std_error<0.01)
+     
+quantile(gamOutputs$std_error,0.95)
+
 df <- inner_join(spTrends, gamOutputs, by = c("species","Taxa"))
-
-### outlier ##############################
-
-df <- df %>%
-        filter(!species %in% c("ara_1391"))
-
-###plotting ##############################
 
 ggplot(df) +
   geom_point(aes(x = forest_assoc, y = mean_change, colour=Taxa)) +
@@ -89,7 +84,6 @@ ggplot(df) +
   xlim(-0.2,0.15)+
   theme(legend.position = "top")
 ggsave("plots/forestVStrends.png",width=5, height=3.5)
-
 
 ### cluster differences ############################
 
@@ -131,39 +125,8 @@ ggplot() +
 
 ggsave("plots/forest_vs_cluster.png",width=5, height=4)
 
-### relative differences ###################
+### taxa-level ###################
 
-#get mean trend of each and get differences from mean
-rel_spTrends <- spTrends %>%
-                  group_by(Taxa, cluster) %>%
-                  mutate(medChange = median(mean_change)) %>%
-                  ungroup() %>%
-                  group_by(Taxa) %>%
-                  mutate(medChange = median(medChange),
-                         mean_change = mean_change - medChange) %>%
-                  ungroup()%>%
-                  mutate(cluster = case_when(cluster==1 ~ 'open',
-                             cluster==2 ~ 'flat',
-                             cluster==3 ~ 'forest',
-                             cluster==4 ~ 'humped'))
-
-ggplot(rel_spTrends) +
-  geom_boxplot(aes(x = Taxa, y = mean_change)) +
-  geom_hline(yintercept = 0, linetype="dashed") +
-  coord_flip() +
-  facet_wrap(~cluster,nrow=1)
-
-ggplot(rel_spTrends) +
-  geom_boxplot(aes(x = cluster, y = mean_change)) +
-  geom_hline(yintercept = 0, linetype="dashed") 
-
-ggplot(rel_spTrends) +
-  geom_boxplot(aes(x = Taxa, y = mean_change, fill=cluster)) +
-  geom_hline(yintercept = 0, linetype="dashed") +
-  coord_flip() +
-  ylab("Mean growth rate (relative to taxa mean)")
-
-#not made relative
 spTrends %>%
   mutate(cluster = case_when(cluster==1 ~ 'flat',
                              cluster==2 ~ 'humped',
@@ -182,4 +145,32 @@ ggplot() +
 
 ggsave("plots/forest_species_vs_cluster.png",width=6, height=7)
 
-### end ##################################
+### forest specialisation ###############
+
+forestSpecial <- readRDS("outputs/forestAssociations/forestSpecial_mixed_linear.rds") %>%
+                    mutate(species = tolower(species))
+
+#preference for broadleaf
+summary(forestSpecial$ForestSpecial[forestSpecial$ForestSpecial>0])
+
+#preference for coniferous
+summary(forestSpecial$ForestSpecial[forestSpecial$ForestSpecial<0])
+
+#create categories
+forestSpecial$forestType <- ifelse(forestSpecial$ForestSpecial>4, "Broadleaf",
+                                   ifelse(forestSpecial$ForestSpecial<(-4), "Conif",
+                                   "Indifferent"))
+table(forestSpecial$forestType)
+
+typeTrends <- inner_join(spTrends, forestSpecial) %>%
+                  filter(forestType %in% c("Broadleaf", "Conif"))
+
+ggplot(typeTrends) +
+  geom_boxplot(aes(x = forestType, y = mean_change)) 
+
+ggplot(typeTrends) +
+  geom_boxplot(aes(x = Taxa, y = mean_change, fill=forestType)) +
+  coord_flip() +
+  geom_hline(yintercept=0, linetype="dashed")
+
+### end ####################################
