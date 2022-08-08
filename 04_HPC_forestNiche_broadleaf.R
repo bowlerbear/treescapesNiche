@@ -136,11 +136,11 @@ commonSpecies <- speciesSummary %>%
   as.character()
 
 #with moths, there is a problem with "Lep_8026", remove it
-commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_8026")]
-commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_7243")]
-commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_6856")]
-commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_5935")]
-commonSpecies
+# commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_8026")]
+# commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_7243")]
+# commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_6856")]
+# commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_5935")]
+# commonSpecies
 
 #report some feedback
 message(paste('Total number of species:',nrow(speciesSummary)))
@@ -348,7 +348,7 @@ all(row.names(occMatrix) == visit_data$visitID)
 # 
 # message('Basic gam done')
 
-### basic gamm4 ###########################################
+### basic gamm ###########################################
 
 fitGammNiche <- function(myspecies){
 
@@ -358,7 +358,7 @@ fitGammNiche <- function(myspecies){
 
   #fit gam and pull out forest cover effect
   require(mgcv)
-  gamm1 <- gamm(Species ~ decidForest + LL + yday + yday2 + s(X,Y),
+  gamm1 <- gamm(Species ~ decidForest + LL + s(yday) + s(X,Y),
                  family = "binomial",
                  random = list(Year=~1),
                  data = visit_data)
@@ -388,7 +388,7 @@ fitGammNiche <- function(myspecies){
 
   #fit gam and pull out forest cover effect
   require(mgcv)
-  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL + yday + yday2 + s(X,Y),
+  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL + s(yday) + s(X,Y),
                  random = list(Year=~1),
                  family = "binomial",
                  data = visit_data)
@@ -428,7 +428,7 @@ fitGammNiche <- function(myspecies){
   
   #fit gam and pull out forest cover effect
   require(mgcv)
-  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL + yday + yday2 + s(X,Y),
+  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL + s(yday) + s(X,Y),
                 random = list(Year=~1),
                 family = "binomial",
                 data = visit_data)
