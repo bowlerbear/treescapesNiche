@@ -80,7 +80,7 @@ getModels <- function(modelFolder,modeltype = "simple_linear"){
   return(temp)
 }
 
-### linear associations #####################
+### linear #####################
 
 gamOutputs <- getModels(modelFolder,modeltype = "simple_linear")
           
@@ -241,7 +241,9 @@ ggplot(allGams) +
 
 #mostly correlated
 
-### forest special ##############################################
+### forest special 1 ##############################################
+
+#based on continous forest associations
 
 #run code in previous section
 
@@ -278,6 +280,32 @@ ggplot(allGams) +
   scale_color_gradient2() +
   geom_hline(yintercept=0) + geom_vline(xintercept=0) +
   xlim(-0.1,0.1) + ylim(-0.1,0.1)
+
+### forest special 2 ##############################################
+
+#based on GAMM shape models
+gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
+                                  modeltype = "mixed_shape") %>%
+  add_column(forest = "broadleaf") %>%
+  rename(forestCover = decidForest)
+
+gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
+                              modeltype = "mixed_shape") %>%
+  add_column(forest = "conif") %>%
+  rename(forestCover = conif_forest)
+
+
+allGams <- bind_rows(gamOutputs_broadleaf,gamOutputs_conif) %>%
+  dplyr::select(forest, forestCover, species, Taxa, preds) %>%
+  filter(forestCover==50) %>%
+  pivot_wider(everything(),
+              names_from="forest", 
+              values_from="preds") %>%
+  janitor::clean_names()
+
+allGams %>%
+  mutate(ForestSpecial = boot::logit(broadleaf) - boot::logit(conif)) %>%
+  saveRDS(., file="outputs/forestAssociations/forestSpecial_mixed_shape.rds")
 
 ### occ-det models ##############################################
 
