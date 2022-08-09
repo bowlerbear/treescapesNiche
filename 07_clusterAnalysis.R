@@ -367,13 +367,16 @@ gamOutputs %>%
                              cluster==2 ~ 'flat',
                              cluster==3 ~ 'forest',
                              cluster==4 ~ 'humped')) %>%
-  group_by(cluster,decidForest) %>%
+  mutate(cluster = factor(cluster, 
+                          levels=c("forest","humped","flat","open"))) %>%
+  group_by(cluster,decidForest, Taxa) %>%
   summarise(preds = median(preds)) %>%
   ggplot()+
-  geom_line(aes(x = decidForest, y = preds))+
+  geom_line(aes(x = decidForest, y = preds, colour=Taxa))+
   xlab("Decid forest cover %") + ylab("Occupancy")+
   facet_wrap(~cluster) +
-  theme_classic()
+  theme_classic() +
+  theme(legend.position = "none")
 ggsave("plots/clustering_all_deriv_means.png")
 
 #how each taxa is distributed in each cluster
