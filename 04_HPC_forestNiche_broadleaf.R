@@ -63,8 +63,6 @@ load(paste(dataDir, taxaFile,sep="/"))
 message('Data has been read in')
 message(paste('Taxa is:',mytaxa))
 
-head(taxaFile)
-
 ###standardize labels ################################
 
 if("SQ_1KM" %in% names(taxa_data)){
@@ -83,27 +81,10 @@ if(!("YEAR" %in% names(taxa_data))){
 } else {}
 
 
-### subsample recs ####################################
+taxa_data$Species <- taxa_data$CONCEPT
+head(taxa_data)
 
-# we dont need tonnes of data to estimate forest preference, so cap to 10000 visits
-
-#by year
-taxa_data <- taxa_data %>%
-                filter(YEAR > 1989 & YEAR <2016)  # this is the period of the forest cover data
-
-
-taxa_data$visit <- paste(taxa_data$TO_GRIDREF,taxa_data$TO_STARTDATE,sep="_")
-
-nuVisits <- length(unique(taxa_data$visit))
-
-selectVisits <- sample(unique(taxa_data$visit), size = ifelse(nuVisits>10000,
-                                                      10000,
-                                                      nuVisits))
-
-taxa_data <- taxa_data %>%
-  filter(visit %in% selectVisits)
-
-### coords ############################################
+### add coords ############################################
 
 coords <- OSgrid2GB_EN(taxa_data$TO_GRIDREF)
 #qplot(EASTING,NORTHING, data=coords)
@@ -115,38 +96,7 @@ taxa_data <- taxa_data %>%
 #EPSG:27700
 #"+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +datum=OSGB36 +units=m +no_defs" 
 
-### identify species for analysis ###################
-
-#for simplicity...
-taxa_data$Species <- taxa_data$CONCEPT
-
-#sum number of records per species
-speciesSummary <- taxa_data %>%
-  group_by(Species) %>%
-  summarise(nuRecs = length(Species),
-            nuYears = length(unique(YEAR)),
-            nuSites = length(unique(TO_GRIDREF))) %>%
-  ungroup() %>%
-  arrange(desc(nuRecs))
-
-#how many species do we have at least 50 records for
-commonSpecies <- speciesSummary %>%
-  filter(nuRecs > 50) %>%
-  pull(Species) %>%
-  as.character()
-
-#with moths, there is a problem with "Lep_8026", remove it
-# commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_8026")]
-# commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_7243")]
-# commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_6856")]
-# commonSpecies <- commonSpecies[-which(commonSpecies=="Lep_5935")]
-# commonSpecies
-
-#report some feedback
-message(paste('Total number of species:',nrow(speciesSummary)))
-message(paste('Number of species passing threshold:',length(commonSpecies)))
-
-### filter #########################################
+### spatial filter #########################################
 
 #plot first set of species
 # taxa_data %>%
@@ -174,6 +124,28 @@ taxa_data <- taxa_data %>%
   filter(st_intersects(taxa_data_spatial, GBR, sparse = FALSE)[,1]) 
 
 message(paste('Number of records passing filter:',nrow(taxa_data)))
+
+### subsample recs ####################################
+
+set.seed(3)
+
+taxa_data <- taxa_data %>% filter(YEAR > 1989 & YEAR <2016)  # this is the period of the forest cover data
+
+taxa_data$visit <- paste(taxa_data$TO_GRIDREF,taxa_data$TO_STARTDATE,sep="_")
+
+#option 1: simple subsample
+# we dont need tonnes of data to estimate forest preference, so cap to 10000 visits
+# nuVisits <- length(unique(taxa_data$visit))
+# selectVisits <- sample(unique(taxa_data$visit), size = ifelse(nuVisits>10000,
+#                                                               10000,
+#                                                               nuVisits))
+# taxa_data <- taxa_data %>% filter(visit %in% selectVisits)
+
+#option 2: undersample well-sampled grids - one visit per grid
+taxa_data <- taxa_data %>%
+                group_by(TO_GRIDREF) %>%
+                filter(visit == sample(visit,1)) %>%
+                ungroup()
 
 ### organize data into visits #######################
 
@@ -219,6 +191,34 @@ nrow(visit_data)
 
 #average number of sites visited per year
 message(paste('Median number of sites visited per year:', median(table(visit_data$Year))))
+
+### identify species for analysis ###################
+
+#sum number of records per species
+speciesSummary <- taxa_data %>%
+  group_by(Species) %>%
+  summarise(nuRecs = length(Species),
+            nuYears = length(unique(YEAR)),
+            nuSites = length(unique(TO_GRIDREF))) %>%
+  ungroup() %>%
+  arrange(desc(nuRecs))
+
+#how many species do we have at least 50 records for
+commonSpecies <- speciesSummary %>%
+  filter(nuRecs > 100 & nuSites > 50) %>%
+  pull(Species) %>%
+  as.character()
+
+#report some feedback
+message(paste('Total number of species:',nrow(speciesSummary)))
+message(paste('Number of species passing threshold:',length(commonSpecies)))
+
+### class imbalance ##################################
+
+#get all positive detections for select species
+#subsample negative detections
+#one of each per grid
+#10km square
 
 ### get forest cover #################################
 
@@ -358,7 +358,7 @@ fitGammNiche <- function(myspecies){
 
   #fit gam and pull out forest cover effect
   require(mgcv)
-  gamm1 <- gamm(Species ~ decidForest + LL + s(yday) + s(X,Y),
+  gamm1 <- gamm(Species ~ decidForest + LL +  yday +yday2 + s(X,Y),
                  family = "binomial",
                  random = list(Year=~1),
                  data = visit_data)
@@ -388,7 +388,7 @@ fitGammNiche <- function(myspecies){
 
   #fit gam and pull out forest cover effect
   require(mgcv)
-  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL + s(yday) + s(X,Y),
+  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL +  yday +yday2 + s(X,Y),
                  random = list(Year=~1),
                  family = "binomial",
                  data = visit_data)
@@ -396,7 +396,7 @@ fitGammNiche <- function(myspecies){
   #predict the gam effect of forest cover
   newdata = data.frame(decidForest = seq(0,100,by=1),
                        yday = median(visit_data$yday),
-                       yday2 = median(visit_data$yday2),
+                       yday2 = unique(visit_data$yday2[visit_data$yday==median(visit_data$yday)]),
                        X = median(visit_data$X),
                        Y = median(visit_data$Y),
                        LL = "long",
@@ -428,7 +428,7 @@ fitGammNiche <- function(myspecies){
   
   #fit gam and pull out forest cover effect
   require(mgcv)
-  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL + s(yday) + s(X,Y),
+  gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL + yday +yday2 + s(X,Y),
                 random = list(Year=~1),
                 family = "binomial",
                 data = visit_data)
