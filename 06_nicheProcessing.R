@@ -8,14 +8,14 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflie
                  "Dragonflies","E&D","Ephemeroptera","Gelechiids","Hoverflies",
                  "Ladybirds","LeafSeedBeetles","Molluscs","Moths",
                  "Orthoptera","PlantBugs","ShieldBugs",
-                 "Soldierflies","Spiders","Trichoptera","Wasps","Weevils")
-#23
+                 "Soldierflies","Spiders","Trichoptera","Wasps")
+#21
 
 ### choose models ###########################
 
-modelFolder <- "outputs/forestAssociations/broadleaf"
+modelFolder <- "outputs/forestAssociations/broadleaf_subsample2"
 
-modelFolder <- "outputs/forestAssociations/conif"
+modelFolder <- "outputs/forestAssociations/conif_subsample2"
 
 ### species per taxa ########################
 
@@ -154,15 +154,19 @@ taxaSummary <- gamOutputs %>%
   arrange(desc(medEffect))
 gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
 
-gamOutputs %>%
-  #filter(estimate>(-0.1)) %>%
+#plotting
+fig1a <- gamOutputs %>%
+  filter(estimate>(-0.1)) %>%
   filter(std_error<0.05) %>%
   ggplot() +
   geom_density_ridges(aes(x = estimate, y = Taxa, fill=Taxa),
                       rel_min_height = 0.001) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   theme(legend.position = "none") +
+  ylab("Taxa (ordered by median value)") +
   xlab("Association with forest cover")
+
+saveRDS(fig1a, file="plots/fig1a.rds")
 
 ### gam shape/gamm ###############################################
 
@@ -216,11 +220,11 @@ ggplot(allGams) +
 
 ### compare decid vs conif #######################################
 
-gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
+gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample2",
                                   modeltype = "mixed_linear") %>%
                                   add_column(forest = "broadleaf")
 
-gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
+gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif_subsample2",
                               modeltype = "mixed_linear") %>%
                               add_column(forest = "conif")
 
@@ -264,7 +268,9 @@ subset(allGams, ForestSpecial < (-38))
 allGams %>%
   saveRDS(., file="outputs/forestAssociations/forestSpecial_mixed_linear.rds")
 
-ggplot(allGams) +
+allGams %>%
+  filter(abs(ForestSpecial)<2) %>%
+  ggplot() +
   geom_point(aes(x = estimate_broadleaf, y = estimate_conif, 
                  colour=ForestSpecial)) +
   facet_wrap(~taxa, scales="free") +
@@ -273,7 +279,9 @@ ggplot(allGams) +
   geom_hline(yintercept=0)+
   geom_vline(xintercept=0)
 
-ggplot(allGams) +
+allGams %>%
+  filter(abs(ForestSpecial)<10) %>%
+ggplot() +
   geom_point(aes(x = estimate_broadleaf, y = estimate_conif, 
                  colour=ForestSpecial)) +
   geom_abline(aes(intercept = 0, slope = 1),linetype = "dashed") +

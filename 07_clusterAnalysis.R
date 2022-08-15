@@ -1,5 +1,6 @@
 ### cluster-analysis #################################
 
+library(cowplot)
 library(tidyverse)
 library(cluster)
 library(TSclust)
@@ -8,11 +9,11 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflie
                  "Dragonflies","E&D","Ephemeroptera","Gelechiids","Hoverflies",
                  "Ladybirds","LeafSeedBeetles","Molluscs","Moths",
                  "Orthoptera","PlantBugs","ShieldBugs",
-                 "Soldierflies","Spiders","Trichoptera","Wasps","Weevils")
-
+                 "Soldierflies","Spiders","Trichoptera","Wasps")
+                 
 ### choose models ###########################
 
-modelFolder <- "outputs/forestAssociations/broadleaf"
+modelFolder <- "outputs/forestAssociations/broadleaf_subsample2"
 
 ### species-level ###################################
 # 
@@ -35,7 +36,7 @@ gamOutputs <- list.files(modelFolder,full.names=TRUE) %>%
   set_names() %>%
   map_dfr(readRDS, .id="source") %>%
   group_by(source) %>%
-  mutate(Taxa = strsplit(source,"_")[[1]][7]) %>%
+  mutate(Taxa = strsplit(source,"_")[[1]][8]) %>%
   ungroup() %>%
   filter(Taxa %in% selectTaxa) %>%
   mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
@@ -68,105 +69,105 @@ nrow(gamOutputs)
 
 #### pam #########################################
 
-#clusters both the height and the shape of the niche
-#scale them relative to mean occupancy
-
-#put into a matrix
-speciesResponses <- reshape2::acast(gamOutputs,
-                                    decidForest ~ Species,
-                                    value.var = "preds")
-
-dim(speciesResponses)
-
-#scale each column 
-mydata <- apply(speciesResponses, 2, function(x){
-  boot::logit(x)
-})
-
-#transpose
-mydata <- t(mydata)
-
-#compare clusters
-wss <- (nrow(mydata)-1)*sum(apply(mydata,2,var))
-for (i in 2:15) wss[i] <- sum(kmeans(mydata,
-                                     centers=i)$withinss)
-plot(1:15, wss, type="b", xlab="Number of Clusters",
-     ylab="Within groups sum of squares")
-
-#pick one
-fit <- pam(mydata, 4, metric="manhattan") # cluster solution
-mydata <- data.frame(mydata, cluster = fit$clustering)
-table(mydata$cluster)
-
-#get silhouette values
-ss <- silhouette(mydata$cluster, 
-                 dist(mydata[,-which(names(mydata)=="cluster")],
-                      method = "manhattan"))
-mydata$sil_width <- ss[,"sil_width"]
-
-
-#add back onto the gamOutput
-gamOutputs <-  mydata %>%
-                select(cluster, sil_width) %>%
-                add_column(Species = row.names(mydata)) %>%
-                inner_join(.,gamOutputs)
-nrow(gamOutputs)
-#drop those whose siloutte width was negative
-gamOutputs <- gamOutputs %>%
-                filter(sil_width >0.05)
-nrow(gamOutputs)#loose 10%
-
-tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
-#1         2         3         4 
-#0.4772783 0.4879862 0.4128816 0.3617228
-
-#species within
-gamOutputs %>%
-  ggplot()+
-  geom_line(aes(x = decidForest, y = preds, groups = Species))+
-  xlab("Decid forest cover %") + ylab("Occupancy")+
-  facet_wrap(~cluster)
-
-gamOutputs %>%
-  ggplot()+
-  geom_line(aes(x = decidForest, y = preds, groups = Species, colour=factor(cluster)))+
-  xlab("Decid forest cover %") + ylab("Occupancy")+
-  facet_wrap(~Taxa, scales="free")
-
-gamOutputs %>%
-  filter(Taxa %in% sort(unique(gamOutputs$Taxa))[6:10]) %>%
-  ggplot()+
-  geom_line(aes(x = decidForest, y = preds, groups = Species))+
-  xlab("Decid forest cover %") + ylab("Occupancy")+
-  facet_wrap(cluster~Taxa, scales="free")
-
-#mean per cluster
-gamOutputs %>%
-  group_by(cluster,decidForest) %>%
-  summarise(preds = median(preds)) %>%
-  ggplot()+
-  geom_line(aes(x = decidForest, y = preds))+
-  xlab("Decid forest cover %") + ylab("Occupancy")+
-  facet_wrap(~cluster)
-
-ggsave("plots/clustering_all_pam_means.png")
-
-#how each taxa is distributed in each cluster
-gamOutputs %>%
-  group_by(Taxa, cluster) %>%
-  summarise(nuSpecies = length(unique(Species))) %>%
-  ungroup() %>%
-ggplot() +
-  geom_col(aes(x=Taxa, y = nuSpecies, fill = factor(cluster))) +
-  coord_flip()
-
-ggsave("plots/clustering_all_pam_prop.png")
-
-#save classification
-gamOutputs %>%
-  select(Species, cluster) %>%
-  filter(!duplicated(Species)) %>%
-  saveRDS(., file="outputs/clustering/pam_classification_all.rds")
+# #clusters both the height and the shape of the niche
+# #scale them relative to mean occupancy
+# 
+# #put into a matrix
+# speciesResponses <- reshape2::acast(gamOutputs,
+#                                     decidForest ~ Species,
+#                                     value.var = "preds")
+# 
+# dim(speciesResponses)
+# 
+# #scale each column 
+# mydata <- apply(speciesResponses, 2, function(x){
+#   boot::logit(x)
+# })
+# 
+# #transpose
+# mydata <- t(mydata)
+# 
+# #compare clusters
+# wss <- (nrow(mydata)-1)*sum(apply(mydata,2,var))
+# for (i in 2:15) wss[i] <- sum(kmeans(mydata,
+#                                      centers=i)$withinss)
+# plot(1:15, wss, type="b", xlab="Number of Clusters",
+#      ylab="Within groups sum of squares")
+# 
+# #pick one
+# fit <- pam(mydata, 4, metric="manhattan") # cluster solution
+# mydata <- data.frame(mydata, cluster = fit$clustering)
+# table(mydata$cluster)
+# 
+# #get silhouette values
+# ss <- silhouette(mydata$cluster, 
+#                  dist(mydata[,-which(names(mydata)=="cluster")],
+#                       method = "manhattan"))
+# mydata$sil_width <- ss[,"sil_width"]
+# 
+# 
+# #add back onto the gamOutput
+# gamOutputs <-  mydata %>%
+#                 select(cluster, sil_width) %>%
+#                 add_column(Species = row.names(mydata)) %>%
+#                 inner_join(.,gamOutputs)
+# nrow(gamOutputs)
+# #drop those whose siloutte width was negative
+# gamOutputs <- gamOutputs %>%
+#                 filter(sil_width >0.05)
+# nrow(gamOutputs)#loose 10%
+# 
+# tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
+# #1         2         3         4 
+# #0.4772783 0.4879862 0.4128816 0.3617228
+# 
+# #species within
+# gamOutputs %>%
+#   ggplot()+
+#   geom_line(aes(x = decidForest, y = preds, groups = Species))+
+#   xlab("Decid forest cover %") + ylab("Occupancy")+
+#   facet_wrap(~cluster)
+# 
+# gamOutputs %>%
+#   ggplot()+
+#   geom_line(aes(x = decidForest, y = preds, groups = Species, colour=factor(cluster)))+
+#   xlab("Decid forest cover %") + ylab("Occupancy")+
+#   facet_wrap(~Taxa, scales="free")
+# 
+# gamOutputs %>%
+#   filter(Taxa %in% sort(unique(gamOutputs$Taxa))[6:10]) %>%
+#   ggplot()+
+#   geom_line(aes(x = decidForest, y = preds, groups = Species))+
+#   xlab("Decid forest cover %") + ylab("Occupancy")+
+#   facet_wrap(cluster~Taxa, scales="free")
+# 
+# #mean per cluster
+# gamOutputs %>%
+#   group_by(cluster,decidForest) %>%
+#   summarise(preds = median(preds)) %>%
+#   ggplot()+
+#   geom_line(aes(x = decidForest, y = preds))+
+#   xlab("Decid forest cover %") + ylab("Occupancy")+
+#   facet_wrap(~cluster)
+# 
+# ggsave("plots/clustering_all_pam_means.png")
+# 
+# #how each taxa is distributed in each cluster
+# gamOutputs %>%
+#   group_by(Taxa, cluster) %>%
+#   summarise(nuSpecies = length(unique(Species))) %>%
+#   ungroup() %>%
+# ggplot() +
+#   geom_col(aes(x=Taxa, y = nuSpecies, fill = factor(cluster))) +
+#   coord_flip()
+# 
+# ggsave("plots/clustering_all_pam_prop.png")
+# 
+# #save classification
+# gamOutputs %>%
+#   select(Species, cluster) %>%
+#   filter(!duplicated(Species)) %>%
+#   saveRDS(., file="outputs/clustering/pam_classification_all.rds")
 
 #### correlation based ##############################
 
@@ -198,11 +199,11 @@ nrow(gamOutputs)
 #drop those whose siloutte width was negative
 gamOutputs <- gamOutputs %>%
   filter(sil_width >0.05)
-nrow(gamOutputs)#loose 10%
+nrow(gamOutputs)#loose 1%
 
 tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
 #1         2         3         4 
-#0.3889281 0.8118945 0.6423463 0.5319811
+#0.8314751 0.7955669 0.5316327 0.5217059
 
 #species within
 gamOutputs %>%
@@ -332,11 +333,10 @@ gamOutputs <- gamOutputs %>%
   filter(sil_width >0.05)
 nrow(gamOutputs)#loose 15%
 
-#better clustering!!!
 tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
 tapply(gamOutputs$sil_width, gamOutputs$cluster, min)
 #1         2         3         4 
-#0.3172022 0.6660058 0.2711170 0.3639139 
+#0.3382692 0.7061721 0.3314556 0.3524694
 
 #species within
 gamOutputs %>%
@@ -362,13 +362,14 @@ gamOutputs %>%
   facet_grid(cluster~Taxa)
 
 #mean per cluster
-gamOutputs %>%
-  mutate(cluster = case_when(cluster==1 ~ 'open',
-                             cluster==2 ~ 'flat',
-                             cluster==3 ~ 'forest',
-                             cluster==4 ~ 'humped')) %>%
+(fig1b <- gamOutputs %>%
+  mutate(cluster = case_when(cluster==1 ~ 'prefer open',
+                             cluster==2 ~ 'weak preference',
+                             cluster==3 ~ 'prefer forest',
+                             cluster==4 ~ 'prefer intermediate')) %>%
   mutate(cluster = factor(cluster, 
-                          levels=c("forest","humped","flat","open"))) %>%
+                          levels=c("prefer forest","prefer intermediate","weak preference",
+                                   "prefer open"))) %>%
   group_by(cluster,decidForest, Taxa) %>%
   summarise(preds = median(preds)) %>%
   ggplot()+
@@ -376,31 +377,43 @@ gamOutputs %>%
   xlab("Decid forest cover %") + ylab("Occupancy")+
   facet_wrap(~cluster) +
   theme_classic() +
-  theme(legend.position = "none")
+  theme(legend.position = "none"))
 ggsave("plots/clustering_all_deriv_means.png")
 
 #how each taxa is distributed in each cluster
-gamOutputs %>%
+(fig1c <- gamOutputs %>%
   group_by(Taxa, cluster) %>%
   summarise(nuSpecies = length(unique(Species))) %>%
   ungroup() %>%
-  mutate(cluster = case_when(cluster==1 ~ 'open',
-                             cluster==2 ~ 'flat',
-                             cluster==3 ~ 'forest',
-                             cluster==4 ~ 'humped')) %>%
-  mutate(cluster = factor(cluster, 
-                          levels=c("forest","humped","flat","open"))) %>%
+    mutate(cluster = case_when(cluster==1 ~ 'prefer open',
+                               cluster==2 ~ 'weak preference',
+                               cluster==3 ~ 'prefer forest',
+                               cluster==4 ~ 'prefer intermediate')) %>%
+    mutate(cluster = factor(cluster, 
+                            levels=c("prefer forest","prefer intermediate","weak preference",
+                                     "prefer open"))) %>%
   ggplot() +
   geom_col(aes(x=Taxa, y = nuSpecies, fill = cluster)) +
+  ylab("Number of species") +
   scale_fill_brewer(palette = "RdYlGn", direction =-1) +
   coord_flip()+
-  theme_classic()
+  theme_classic())
 ggsave("plots/clustering_all_deriv_prop.png")
 
 gamOutputs %>%
   select(Species, cluster) %>%
   filter(!duplicated(Species)) %>%
 saveRDS(., file="outputs/clustering/deriv_classification_all.rds")
+
+### fig1 #######################################
+
+fig1a <- readRDS("plots/fig1a.rds")
+fig1a <- fig1a + theme_classic() +
+  theme(legend.position="none")
+
+fig1bc <- plot_grid(fig1b, fig1c, nrow=2, labels=c("b", "c"))
+
+plot_grid(fig1a, fig1bc, ncol=2, labels=c("a",""))
 
 ### concordance #####################################
 

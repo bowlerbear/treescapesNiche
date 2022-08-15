@@ -6,7 +6,7 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflie
                  "Dragonflies","E&D","Ephemeroptera","Gelechiids","Hoverflies",
                  "Ladybirds","LeafSeedBeetles","Molluscs","Moths",
                  "Orthoptera","PlantBugs","ShieldBugs",
-                 "Soldierflies","Spiders","Trichoptera","Wasps","Weevil")
+                 "Soldierflies","Spiders","Trichoptera","Wasps")
 
 ### trends ##############################
 
@@ -93,12 +93,12 @@ mean(!is.na(spTrends$broad_biotope))
 treeDF <- spTrends %>%
           filter(grepl("tree-associated", broad_biotope))
 
-g1 <- treeDF %>%
+(g1 <- treeDF %>%
 ggplot()+
   geom_boxplot(aes(x=Taxa, y = median_change)) +
   ylab("Species growth rate")+
   geom_hline(yintercept=0, linetype="dashed")+
-  coord_flip() 
+  coord_flip()) 
 
 #broad classification
 table(spTrends$habitat)
@@ -109,23 +109,27 @@ mean(!is.na(spTrends$habitat))
 treeDF <- spTrends %>%
   filter(habitat %in% c("arboreal","decaying wood","shaded woodland floor"))
 
-g2 <- treeDF %>%
+(g2 <- treeDF %>%
   ggplot()+
   geom_boxplot(aes(x=Taxa, y = median_change)) +
   ylab("Species growth rate")+
   facet_wrap(~habitat) +
   geom_hline(yintercept=0, linetype="dashed")+
-  coord_flip() 
+  coord_flip()) 
 
-cowplot::plot_grid(g1,g2,
-                   nrow=2)
+#cowplot::plot_grid(g1,g2,
+#                   nrow=2)
 
-ggsave("plots/pantheon_traits.png",width=5.5,height=6)
+#ggsave("plots/pantheon_traits.png",width=5.5,height=6)
 
 ### habitat vs new metric ####
 
-gamOutputs <- readRDS("outputs/forestAssociations/broadleafAssocations_mixed_linear.rds") %>%
+gamOutputs <- readRDS("outputs/forestAssociations/forestSpecial_mixed_linear.rds") %>%
                   mutate(species = tolower(species))
+
+#get max of either forest pref
+gamOutputs$estimate_forest <- ifelse(gamOutputs$estimate_broadleaf>gamOutputs$estimate_conif,
+                                     gamOutputs$estimate_broadleaf, gamOutputs$estimate_conif)
 
 #sort species names
 gamOutputs$Species <- speciesNames$NAME[match(gamOutputs$species, speciesNames$CONCEPT)]
@@ -137,14 +141,15 @@ gamOutputs <- indexFile %>%
                 mutate(Species = tolower(Species)) %>%
                 inner_join(.,gamOutputs, by="Species")
                
-gamOutputs$habitatS <- ifelse(grepl("tree-associated", gamOutputs$broad_biotope),
-                              "Tree","Other")
+gamOutputs$habitat <- ifelse(grepl("tree-associated", gamOutputs$broad_biotope),
+                              "Tree-associated","Other")
  
 gamOutputs %>%
-  filter(abs(estimate)<0.05) %>%
+  filter(abs(estimate_forest)<0.05) %>%
 ggplot() +
-  geom_boxplot(aes(x=Taxa, y=estimate, fill=habitatS)) +
+  geom_boxplot(aes(x=taxa, y=estimate_forest, fill=habitat)) +
   geom_hline(yintercept=0, linetype="dashed") +
+  ylab("Forest association")+
   coord_flip()
 
 ### conservation status ####
@@ -168,16 +173,26 @@ spTrends %>%
   geom_col(aes(x=Taxa, y = nuSpecies, fill=direction)) +
   ylab("Number of species")
 
+speciesTreeS41 <- spTrends$species[spTrends$S41==1 & spTrends$broad_biotope=="tree-associated"]
+
+saveRDS(speciesTreeS41,file="outputs/speciesTreesS41.rds")
+
 ### full list ####
 
 prioritySpecies <- list.files("C:/Users/diabow/OneDrive - UKCEH/Projects/General/Protection",
                               pattern='.csv', full.names = TRUE) %>%
                     read.csv(.,skip=1)
 
-sum(missingSpecies %in% prioritySpecies$NBN.current.scientific.name)
+#sum(missingSpecies %in% prioritySpecies$NBN.current.scientific.name)
 
 spTrends$priority <- ifelse(spTrends$Species %in% prioritySpecies$NBN.current.scientific.name,
                             1,0)
+
+myprioritySpecies <- data.frame(Species = spTrends$Species[spTrends$priority==1],
+                                Taxa = spTrends$Taxa[spTrends$priority==1])
+
+saveRDS(myprioritySpecies,
+        file="outputs/prioritySpecies.rds")
 
 #compare the two
 table(spTrends$priority,spTrends$S41)
@@ -193,5 +208,25 @@ spTrends %>%
   ylab("Number of species")
 
 ggsave("plots/conservation_status.png",width=6,height=3)
+
+### section 41 species time series #############################################
+
+speciesTS <- list.files("outputs/priority41", full.names = TRUE) %>%
+                map_dfr(readRDS) %>%
+                inner_join(., spTrends, by="species") %>%
+                mutate(year = as.numeric(gsub("year_","",year)))
+
+speciesTS$NAME[is.na(speciesTS$NAME)] <- speciesTS$species[is.na(speciesTS$NAME)]
+
+speciesTS$Species <- sapply(speciesTS$NAME, function(x){
+  paste0(toupper(substr(x,1,1)), tolower(substr(x,2,nchar(x))))
+}) %>% as.character()
+
+ggplot(speciesTS) +
+  geom_point(aes(x = year, y = meanOcc)) +
+  geom_ribbon(aes(x = year, y=meanOcc, ymin = lowerOcc, ymax = upperOcc), alpha=0.5) +
+  ylab("Predicted occupancy proportion") +
+  xlab("Year") +
+  facet_wrap(~Species)
 
 ### end ######################
