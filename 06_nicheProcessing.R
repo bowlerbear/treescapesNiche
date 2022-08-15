@@ -243,6 +243,14 @@ ggplot(allGams) +
   geom_hline(yintercept=0)+
   geom_vline(xintercept=0)
 
+
+ggplot(allGams) +
+  geom_point(aes(x = std_error_broadleaf, y = std_error_conif)) +
+  facet_wrap(~taxa, scales="free") +
+  geom_abline(aes(intercept = 0, slope = 1),linetype = "dashed") +
+  geom_hline(yintercept=0)+
+  geom_vline(xintercept=0)
+
 #mostly correlated
 
 ### forest special 1 ##############################################
