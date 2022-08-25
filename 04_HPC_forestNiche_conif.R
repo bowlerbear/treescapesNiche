@@ -141,11 +141,24 @@ taxa_data$visit <- paste(taxa_data$TO_GRIDREF,taxa_data$TO_STARTDATE,sep="_")
 #                                                               nuVisits))
 # taxa_data <- taxa_data %>% filter(visit %in% selectVisits)
 
+
+#but reduce sampling at sites with many visits in the same year
+#(visitsPerYear <- visit_data %>%
+#    group_by(SiteID,Year) %>%
+#    summarise(nuVisits = length(visit)))
+
+#cap at 5 visits per site and year
+#visit_data <- visit_data %>%
+#  group_by(SiteID, X, Y, Year) %>%
+#  sample_n(size = ifelse(length(visit)>5,5,length(visit))) %>%
+#  ungroup()
+
+
 #option 2: undersample well-sampled grids - one visit per grid
-taxa_data <- taxa_data %>%
-  group_by(TO_GRIDREF) %>%
-  filter(visit == sample(visit,1)) %>%
-  ungroup()
+# taxa_data <- taxa_data %>%
+#                 group_by(TO_GRIDREF) %>%
+#                 filter(visit == sample(visit,1)) %>%
+#                 ungroup()
 
 ### organize data into visits #######################
 
@@ -159,9 +172,11 @@ visit_data <- taxa_data %>%
          Year = YEAR,
          Date = TO_STARTDATE) %>%
   mutate(Date = as.Date(Date)) %>%
-  mutate(yday = lubridate::yday(Date)) %>%
-  mutate(yday2 = as.numeric(scale(yday^2))) %>%
-  mutate(yday = as.numeric(scale(yday))) 
+  mutate(Yday = lubridate::yday(Date)) %>%
+  mutate(yday2 = as.numeric(scale(Yday^2))) %>%
+  mutate(yday = as.numeric(scale(Yday)))  
+
+message(paste('Median number of sites visited per year:', median(table(visit_data$Year))))
 
 ### list length #####################################
 
@@ -172,25 +187,6 @@ visit_data$LL <- ifelse(visit_data$nuSpecies==1,"single",
                         ifelse(visit_data$nuSpecies %in% 2:3,"short","long"))
 
 table(visit_data$LL)
-
-### cap repeat visits ##################################
-
-#reduce sampling at sites with many visits in the same year
-
-(visitsPerYear <- visit_data %>%
-   group_by(SiteID,Year) %>%
-   summarise(nuVisits = length(visit)))
-
-#cap at 5 visits per site and year
-visit_data <- visit_data %>%
-  group_by(SiteID, X, Y, Year) %>%
-  sample_n(size = ifelse(length(visit)>5,5,length(visit))) %>%
-  ungroup()
-
-nrow(visit_data)
-
-#average number of sites visited per year
-message(paste('Median number of sites visited per year:', median(table(visit_data$Year))))
 
 ### identify species for analysis ###################
 
@@ -215,10 +211,53 @@ message(paste('Number of species passing threshold:',length(commonSpecies)))
 
 ### class imbalance ##################################
 
-#get all positive detections for select species
-#subsample negative detections
-#one of each per grid
-#10km square
+#subsample option 3
+visit_data$Grid10km <- sapply(visit_data$SiteID,
+                              function(x){substr(as.character(x),1,4)})
+
+#write the function here to use in the species models below
+
+#identify whether species is present in the 10 km grid and subset to those grids
+subsampleData <- function(visit_data){
+  
+  #get all detections of a species
+  presenceRecords <- visit_data %>%
+    filter(Species==1)
+  
+  #get sample of negative detections at within 10 km grids in which a species is present
+  presenceGrids <- visit_data %>%
+    group_by(Grid10km) %>%
+    summarise(detectSpecies = max(Species)) %>%
+    filter(detectSpecies == 1) %>%
+    pull("Grid10km") %>% as.character()
+  
+  #get when during the year the species is detectable
+  presenceSeason <- visit_data %>%
+    filter(Species == 1) %>%
+    summarise(minDay = min(Yday),
+              maxDay = max(Yday)) 
+  
+  absenceRecords <- visit_data %>%
+    filter(Grid10km %in% presenceGrids) %>%
+    filter(Yday > presenceSeason$minDay & Yday < presenceSeason$maxDay) %>%
+    filter(Species==0) %>%
+    group_by(Grid10km, Year) %>%
+    slice_sample(n = 1) %>%
+    ungroup()
+  
+  #if there are more presence than absences, subsample the presences to same number
+  if(nrow(presenceRecords) > nrow(absenceRecords)){
+    presenceRecords <- presenceRecords %>%
+      slice_sample(n = nrow(absenceRecords))
+  }
+  
+  
+  #combine all together
+  allRecords <- bind_rows(presenceRecords,
+                          absenceRecords)
+  
+}
+
 ### get forest cover #################################
 
 # need to align the year of visit with the nearest year of forest cover data
@@ -355,13 +394,16 @@ fitGammNiche <- function(myspecies){
   all(row.names(occMatrix) == visit_data$visitID)
   visit_data$Species <- occMatrix[,myspecies]
 
+  #for subsample option 3
+  visit_data <- subsampleData(visit_data)  
+  
   #fit gam and pull out forest cover effect
   require(mgcv)
   gamm1 <- gamm(Species ~ conifForest + LL + yday + yday2 + s(X,Y),
                  family = "binomial",
                 random = list(Year=~1),
                  data = visit_data)
-  
+
   summary(gamm1$gam)$p.table[2,]
 
 }
@@ -385,6 +427,9 @@ fitGammNiche <- function(myspecies){
   all(row.names(occMatrix) == visit_data$visitID)
   visit_data$Species <- occMatrix[,myspecies]
 
+  #for subsample option 3
+  visit_data <- subsampleData(visit_data)
+  
   #fit gam and pull out forest cover effect
   require(mgcv)
   gamm1 <- gamm(Species ~ s(conifForest, k=3) + LL + yday + yday2 + s(X,Y),
@@ -395,7 +440,7 @@ fitGammNiche <- function(myspecies){
   #predict the gam effect of forest cover
   newdata = data.frame(conifForest = seq(0,100,by=1),
                        yday = median(visit_data$yday),
-                       yday2 = unique(visit_data$yday2[visit_data$yday==median(visit_data$yday)]),
+                       yday2 = median(visit_data$yday2),
                        X = median(visit_data$X),
                        Y = median(visit_data$Y),
                        LL = "long",
@@ -419,35 +464,35 @@ message('Gamm shape done')
 
 ### gam derivatives #####################################
 
-fitGammNiche <- function(myspecies){
-  
-  #check all aligns and add in species
-  all(row.names(occMatrix) == visit_data$visitID)
-  visit_data$Species <- occMatrix[,myspecies]
-  
-  #fit gam and pull out forest cover effect
-  require(mgcv)
-  gamm1 <- gamm(Species ~ s(conifForest, k=3) + LL + yday + yday2 + s(X,Y),
-                random = list(Year=~1),
-                family = "binomial",
-                data = visit_data)
-
-  require(gratia)
-  deriv1 <- derivatives(gamm1$gam, type = "central", term ="s(conifForest)", order=1) %>%
-    add_column(Species = myspecies,
-               edf = summary(gamm1$gam)$edf[1],
-               p = summary(gamm1$gam)$s.table[1,4])
-  
-  return(deriv1)
-  
-}
-
-gamOutput <- commonSpecies %>%
-  map_dfr(fitGammNiche) %>%
-  janitor::clean_names()
-
-saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_derivatives_subset_random_conif_",mytaxa,".rds"))
-
-message('Gamm derivatives done')
-
-### end #######################################################
+# fitGammNiche <- function(myspecies){
+#   
+#   #check all aligns and add in species
+#   all(row.names(occMatrix) == visit_data$visitID)
+#   visit_data$Species <- occMatrix[,myspecies]
+#   
+#   #fit gam and pull out forest cover effect
+#   require(mgcv)
+#   gamm1 <- gamm(Species ~ s(conifForest, k=3) + LL + yday + yday2 + s(X,Y),
+#                 random = list(Year=~1),
+#                 family = "binomial",
+#                 data = visit_data)
+# 
+#   require(gratia)
+#   deriv1 <- derivatives(gamm1$gam, type = "central", term ="s(conifForest)", order=1) %>%
+#     add_column(Species = myspecies,
+#                edf = summary(gamm1$gam)$edf[1],
+#                p = summary(gamm1$gam)$s.table[1,4])
+#   
+#   return(deriv1)
+#   
+# }
+# 
+# gamOutput <- commonSpecies %>%
+#   map_dfr(fitGammNiche) %>%
+#   janitor::clean_names()
+# 
+# saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_derivatives_subset_random_conif_",mytaxa,".rds"))
+# 
+# message('Gamm derivatives done')
+# 
+# ### end #######################################################

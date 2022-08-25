@@ -445,7 +445,7 @@ fitGammNiche <- function(myspecies){
   #predict the gam effect of forest cover
   newdata = data.frame(decidForest = seq(0,100,by=1),
                        yday = median(visit_data$yday),
-                       yday2 = unique(visit_data$yday2[visit_data$yday==median(visit_data$yday)]),
+                       yday2 = median(visit_data$yday2),
                        X = median(visit_data$X),
                        Y = median(visit_data$Y),
                        LL = "long",
