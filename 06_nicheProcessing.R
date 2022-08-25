@@ -13,18 +13,18 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflie
 
 ### choose models ###########################
 
-modelFolder <- "outputs/forestAssociations/broadleaf_subsample2"
+modelFolder <- "outputs/forestAssociations/broadleaf_subsample3"
 
-modelFolder <- "outputs/forestAssociations/conif_subsample2"
+modelFolder <- "outputs/forestAssociations/conif_subsample3"
 
 ### species per taxa ########################
 
 list.files(modelFolder,full.names=TRUE) %>%
-  str_subset("gamOutput_glm_subset_random_") %>%
+  str_subset("gamOutput_gamm_subset_random_") %>%
   set_names() %>%
   map_dfr(readRDS, .id="source") %>%
   group_by(source) %>%
-  mutate(Taxa = strsplit(source,"_")[[1]][6]) %>%
+  mutate(Taxa = strsplit(source,"_")[[1]][7]) %>%
   ungroup() %>%
   filter(Taxa %in% selectTaxa) %>%
   group_by(Taxa) %>%
@@ -171,7 +171,6 @@ saveRDS(fig1a, file="plots/fig1a.rds")
 ### gam shape/gamm ###############################################
 
 gamOutputs <- getModels(modelFolder,modeltype = "mixed_shape")
-#missing conif: Bees, E&D, Moths, Trichoptera
 
 #what taxa do we have?
 sort(unique(gamOutputs$Taxa))
