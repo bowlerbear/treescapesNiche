@@ -6,10 +6,12 @@ theme_set(theme_classic())
 
 selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflies",
                  "Dragonflies","E&D","Ephemeroptera","Gelechiids","Hoverflies",
-                 "Ladybirds","LeafSeedBeetles","Molluscs","Moths",
+                 "Ladybirds","Molluscs","Moths",
                  "Orthoptera","PlantBugs","ShieldBugs",
                  "Soldierflies","Spiders","Trichoptera","Wasps")
 #21
+
+#check Aquatic bugs, Cranefiles, E&D
 
 ### choose models ###########################
 
@@ -62,7 +64,7 @@ getModels <- function(modelFolder,modeltype = "simple_linear"){
     mutate(Taxa = strsplit(Taxa,"_")[[1]][1])%>%
     ungroup() %>%
     filter(Taxa %in% selectTaxa) %>%
-    mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
+    mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidids",
                           TRUE ~ as.character(Taxa)))  %>%
     add_column(modeltype = modeltype)
   
@@ -177,14 +179,14 @@ sort(unique(gamOutputs$Taxa))
 selectTaxa[!selectTaxa %in%  sort(unique(gamOutputs$Taxa))]
 
 speciesMax <- gamOutputs %>%
-  group_by(Species) %>%
+  group_by(species) %>%
   summarise(maxPred = max(preds)) %>%
   ungroup()
 
 #for broad leaf
 gamOutputs %>%
   ggplot()+
-  geom_line(aes(x=decidForest, y=preds, group=Species))+
+  geom_line(aes(x=decidForest, y=preds, group=species))+
   facet_wrap(~Taxa)+
   xlab("Decid forest cover %") + ylab("Occupancy")+
   theme_classic()
@@ -200,6 +202,7 @@ gamOutputs %>%
 ### compare models #################################################
 
 #compare model with and without year as a random effect
+modelFolder <- "outputs/forestAssociations/broadleaf"
 
 gamOutputs_mixed <- getModels(modelFolder,modeltype = "mixed_linear")
 gamOutputs_simple <- getModels(modelFolder,modeltype = "simple_linear")
@@ -219,11 +222,11 @@ ggplot(allGams) +
 
 ### compare decid vs conif #######################################
 
-gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample2",
+gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample3",
                                   modeltype = "mixed_linear") %>%
                                   add_column(forest = "broadleaf")
 
-gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif_subsample2",
+gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif_subsample3",
                               modeltype = "mixed_linear") %>%
                               add_column(forest = "conif")
 
@@ -240,7 +243,8 @@ ggplot(allGams) +
   facet_wrap(~taxa, scales="free") +
   geom_abline(aes(intercept = 0, slope = 1),linetype = "dashed") +
   geom_hline(yintercept=0)+
-  geom_vline(xintercept=0)
+  geom_vline(xintercept=0) +
+  xlab("Broadleaf Association") + ylab("Conifer Association")
 
 
 ggplot(allGams) +
@@ -298,29 +302,29 @@ ggplot() +
 
 ### forest special 2 ##############################################
 
-#based on GAMM shape models
-gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
-                                  modeltype = "mixed_shape") %>%
-  add_column(forest = "broadleaf") %>%
-  rename(forestCover = decidForest)
-
-gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
-                              modeltype = "mixed_shape") %>%
-  add_column(forest = "conif") %>%
-  rename(forestCover = conif_forest)
-
-
-allGams <- bind_rows(gamOutputs_broadleaf,gamOutputs_conif) %>%
-  dplyr::select(forest, forestCover, species, Taxa, preds) %>%
-  filter(forestCover==50) %>%
-  pivot_wider(everything(),
-              names_from="forest", 
-              values_from="preds") %>%
-  janitor::clean_names()
-
-allGams %>%
-  mutate(ForestSpecial = boot::logit(broadleaf) - boot::logit(conif)) %>%
-  saveRDS(., file="outputs/forestAssociations/forestSpecial_mixed_shape.rds")
+# #based on GAMM shape models
+# gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
+#                                   modeltype = "mixed_shape") %>%
+#   add_column(forest = "broadleaf") %>%
+#   rename(forestCover = decidForest)
+# 
+# gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
+#                               modeltype = "mixed_shape") %>%
+#   add_column(forest = "conif") %>%
+#   rename(forestCover = conif_forest)
+# 
+# 
+# allGams <- bind_rows(gamOutputs_broadleaf,gamOutputs_conif) %>%
+#   dplyr::select(forest, forestCover, species, Taxa, preds) %>%
+#   filter(forestCover==50) %>%
+#   pivot_wider(everything(),
+#               names_from="forest", 
+#               values_from="preds") %>%
+#   janitor::clean_names()
+# 
+# allGams %>%
+#   mutate(ForestSpecial = boot::logit(broadleaf) - boot::logit(conif)) %>%
+#   saveRDS(., file="outputs/forestAssociations/forestSpecial_mixed_shape.rds")
 
 ### occ-det models ##############################################
 
