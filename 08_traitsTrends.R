@@ -231,4 +231,21 @@ ggplot(typeTrends, aes(x=ForestSpecial, y = mean_change, size = 1/FS_sd)) +
   geom_hline(yintercept=0, linetype="dashed")+
   theme(legend.position = "none")
 
+### ants #####################################
+
+antsTS <- readRDS("outputs/antsTS.rds")
+
+#subset to forest species
+antsTS <- antsTS %>%
+          filter(species %in% clusterDF$species[clusterDF$cluster==3]) %>%
+          mutate(year = as.numeric(gsub("year_", "", year)))
+
+sort(unique(antsTS$species))
+#"formica rufa"          "leptothorax acervorum"
+
+ggplot(antsTS) +
+  geom_line(aes(x=year, y=meanOcc))+
+  geom_ribbon(aes(x=year, ymin=lowerOcc, ymax=upperOcc), alpha=0.5)+
+  facet_wrap(~species)
+
 ### end ####################################
