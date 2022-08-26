@@ -430,31 +430,33 @@ fitGammNiche <- function(myspecies){
 
   #check all aligns and add in species
   all(row.names(occMatrix) == visit_data$visitID)
+  myspecies <- commonSpecies[37]
   visit_data$Species <- occMatrix[,myspecies]
 
   #for subsample option 3
-  visit_data <- subsampleData(visit_data)
+  visit_dataS <- subsampleData(visit_data)
 
   #fit gam and pull out forest cover effect
   require(mgcv)
   gamm1 <- gamm(Species ~ s(decidForest, k=3) + LL +  yday +yday2 + s(X,Y),
                  random = list(Year=~1),
                  family = "binomial",
-                 data = visit_data)
+                 data = visit_dataS)
 
   #predict the gam effect of forest cover
   newdata = data.frame(decidForest = seq(0,100,by=1),
-                       yday = median(visit_data$yday),
-                       yday2 = median(visit_data$yday2),
-                       X = median(visit_data$X),
-                       Y = median(visit_data$Y),
+                       yday = median(visit_dataS$yday),
+                       yday2 = median(visit_dataS$yday2),
+                       X = median(visit_dataS$X),
+                       Y = median(visit_dataS$Y),
                        LL = "long",
-                       Year = median(visit_data$Year))
+                       Year = median(visit_dataS$Year))
 
-  newdata$preds <- predict(gamm1$gam,newdata, type="response")
-  newdata$preds_se <- predict(gamm1$gam,newdata, se.fit=TRUE, type="response")$se.fit
+  newdata$preds <- predict(gamm1$gam, newdata, type="response")
+  newdata$preds_se <- predict(gamm1$gam, newdata, se.fit=TRUE, type="response")$se.fit
   newdata$Species <- myspecies
-
+  qplot(decidForest,preds,data=newdata)
+  
   return(newdata)
 
 }

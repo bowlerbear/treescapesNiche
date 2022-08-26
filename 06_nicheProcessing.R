@@ -11,7 +11,7 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflie
                  "Soldierflies","Spiders","Trichoptera","Wasps")
 #21
 
-#check Aquatic bugs, Cranefiles, E&D
+#check whether to exclude: Aquatic bugs, Cranefiles, E&D
 
 ### choose models ###########################
 
@@ -158,8 +158,8 @@ gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
 
 #plotting
 fig1a <- gamOutputs %>%
-  filter(estimate>(-0.1)) %>%
-  filter(std_error<0.05) %>%
+  filter(abs(estimate) < 0.1) %>%
+  filter(std_error < 0.1) %>%
   ggplot() +
   geom_density_ridges(aes(x = estimate, y = Taxa, fill=Taxa),
                       rel_min_height = 0.001) +
@@ -199,7 +199,7 @@ gamOutputs %>%
   xlab("Conif forest cover %") + ylab("Occupancy")+
   theme_classic()
 
-### compare models #################################################
+### compare gam vs gamm models #################################################
 
 #compare model with and without year as a random effect
 modelFolder <- "outputs/forestAssociations/broadleaf"
@@ -220,11 +220,62 @@ ggplot(allGams) +
   geom_abline(aes(intercept = 0, slope = 1, linetype = "dashed"))
 #highly correlated
 
+### compare subset options ######################################
+
+gamOutputs_subset1 <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
+                                  modeltype = "mixed_linear") %>%
+                        add_column(subset = "subset1")
+
+nrow(gamOutputs_subset1)
+#2114
+
+gamOutputs_subset3 <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample3",
+                                  modeltype = "mixed_linear") %>%
+                        add_column(subset = "subset3")
+
+nrow(gamOutputs_subset3)
+#2506
+
+allGams <- bind_rows(gamOutputs_subset1, gamOutputs_subset3) %>%
+  dplyr::select(subset, species, Taxa, modeltype, estimate, std_error) %>%
+  pivot_wider(everything(),
+              names_from="subset", 
+              values_from=c("estimate","std_error")) %>%
+  janitor::clean_names() %>%
+  filter(complete.cases(.))
+
+ggplot(allGams) +
+  geom_point(aes(x = estimate_subset1, y = estimate_subset3)) +
+  facet_wrap(~taxa, scales="free") +
+  geom_abline(aes(intercept = 0, slope = 1),linetype = "dashed") +
+  geom_hline(yintercept=0)+
+  geom_vline(xintercept=0) +
+  xlab("Subset1 Association") + ylab("Subset3 Association")
+
+ggplot(allGams) +
+  geom_point(aes(x = std_error_subset1, y = std_error_subset3)) +
+  facet_wrap(~taxa, scales="free") +
+  geom_abline(aes(intercept = 0, slope = 1),linetype = "dashed") +
+  geom_hline(yintercept=0)+
+  geom_vline(xintercept=0)
+
+#get mean correlation and mean difference in error
+
+allGams %>%
+  group_by(taxa) %>%
+  summarise(corr = cor(estimate_subset1, estimate_subset3),
+            error_diff = median(std_error_subset1 - std_error_subset3)) %>%
+  ungroup()
+
+median(allGams$std_error_subset1)
+median(allGams$std_error_subset3)#lower
+
 ### compare decid vs conif #######################################
 
 gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample3",
                                   modeltype = "mixed_linear") %>%
                                   add_column(forest = "broadleaf")
+
 
 gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif_subsample3",
                               modeltype = "mixed_linear") %>%
