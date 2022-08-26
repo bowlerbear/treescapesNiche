@@ -1,5 +1,6 @@
 outlierValue <- function(x){ return( 3 * IQR(x) )}
 
+
 reLabel <- function(cluster){
   
   cluster = ifelse(cluster==1, "prefer open",
@@ -12,5 +13,14 @@ reLabel <- function(cluster){
                             "prefer open"))
   
   return(cluster)
+  
+}
+
+
+makeCapital <- function(string){
+  
+  sapply(string, function(x){
+    paste0(toupper(substr(x,1,1)), tolower(substr(x,2,nchar(x))))
+  })
   
 }
