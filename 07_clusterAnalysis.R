@@ -7,13 +7,17 @@ library(TSclust)
 
 selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflies",
                  "Dragonflies","E&D","Ephemeroptera","Gelechiids","Hoverflies",
-                 "Ladybirds","LeafSeedBeetles","Molluscs","Moths",
+                 "Ladybirds","Molluscs","Moths",
                  "Orthoptera","PlantBugs","ShieldBugs",
                  "Soldierflies","Spiders","Trichoptera","Wasps")
-                 
+
+### useful functions ###################
+
+source("00_functions.R")
+
 ### choose models ###########################
 
-modelFolder <- "outputs/forestAssociations/broadleaf_subsample2"
+modelFolder <- "outputs/forestAssociations/broadleaf_subsample3"
 
 ### species-level ###################################
 # 
@@ -39,10 +43,13 @@ gamOutputs <- list.files(modelFolder,full.names=TRUE) %>%
   mutate(Taxa = strsplit(source,"_")[[1]][8]) %>%
   ungroup() %>%
   filter(Taxa %in% selectTaxa) %>%
-  mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
+  mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidids",
                           TRUE ~ as.character(Taxa)))  %>%
   rename(Species = species,
          decidForest = decid_forest)
+
+#cap at 50% - the 99% forest quartile
+gamOutputs <- gamOutputs %>% filter(decidForest<50)
 
 #Summarize data for each species
 gamSummary <- gamOutputs %>%
@@ -52,19 +59,16 @@ gamSummary <- gamOutputs %>%
 
 #what prop of species show no variation
 
-mean(gamSummary$sdPreds==0) # few!! 10 species
+mean(gamSummary$sdPreds==0) # none
 
 #remove species were the sd is 0 - prob too rare to be modelled
 gamOutputs <- gamOutputs %>%
   filter(Species %in% gamSummary$Species[gamSummary$sdPreds!=0])
 
 #remove species with large sd
-
-quantile(gamSummary$sdPreds, 0.95)
-mean(gamSummary$sdPreds>0.1)
-
 gamOutputs <- gamOutputs %>%
-  filter(Species %in% gamSummary$Species[gamSummary$sdPreds<0.1])
+  filter(Species %in% 
+           gamSummary$Species[gamSummary$sdPreds<outlierValue(gamSummary$sdPreds)])
 nrow(gamOutputs)
 
 #### pam #########################################
@@ -199,11 +203,11 @@ nrow(gamOutputs)
 #drop those whose siloutte width was negative
 gamOutputs <- gamOutputs %>%
   filter(sil_width >0.05)
-nrow(gamOutputs)#loose 1%
+nrow(gamOutputs)#loose 9%
 
 tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
 #1         2         3         4 
-#0.8314751 0.7955669 0.5316327 0.5217059
+#0.7729179 0.5111890 0.7990487 0.4617364
 
 #species within
 gamOutputs %>%
@@ -228,7 +232,7 @@ ggsave("plots/clustering_all_corr_means.png")
 
 #all those in a specific clusters
 gamOutputs %>%
-  filter(cluster==2) %>%
+  filter(cluster==4) %>%
   ggplot()+
   geom_line(aes(x = decidForest, y = preds, groups = Species))+
   xlab("Decid forest cover %") + ylab("Occupancy")+
@@ -261,18 +265,26 @@ getDerivatives <- function(myspecies){
 
   test <- gamOutputs %>%
     filter(Species == myspecies)
-
+  
+  #formal gam
   mod <- gam(preds ~ s(decidForest), data = test,
              method = "REML")
-
+  test$newPreds <- predict(mod)
+  
+  #ggplot(test)+
+  #  geom_point(aes(x=decidForest, y=preds))+
+  #  geom_line(aes(x=decidForest, y=newPreds))
+  
   deriv1 <- derivatives(mod, type = "central", order=1) %>%
-    add_column(Species = myspecies)
+    add_column(Species = myspecies,
+               meanPred = mean(test$preds),
+               cor = cor(test$newPreds, test$preds))
 
   return(deriv1)
 
 }
 
-allDerivatives <- lapply(sort(unique(gamOutputs$Species)), function(x){
+allDerivatives1 <- lapply(sort(unique(gamOutputs$Species)), function(x){
   #print(x)
   getDerivatives(x)
 }) %>%
@@ -280,24 +292,6 @@ allDerivatives <- lapply(sort(unique(gamOutputs$Species)), function(x){
 
 saveRDS(allDerivatives, 
         file="outputs/clustering/allDerivatives.rds")
-
-# # derivatives taken directly from fitted model
-# 
-# allDerivatives <- list.files(modelFolder,full.names=TRUE) %>%
-#   str_subset("gamm_derivatives") %>%
-#   set_names() %>%
-#   map_dfr(readRDS, .id="source") %>%
-#   group_by(source) %>%
-#   mutate(Taxa = strsplit(source, "gamm_derivatives_subset_random_decid_")[[1]][2]) %>%
-#   mutate(Taxa = strsplit(Taxa,"_")[[1]][1]) %>%
-#   ungroup() %>%
-#   filter(Taxa %in% selectTaxa) %>%
-#   mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidid",
-#                           TRUE ~ as.character(Taxa)))
-# #filter extremes?? 
-# temp <- subset(allDerivatives, deriv)
-
-#continue here:
 
 allDerivatives <- readRDS("outputs/clustering/allDerivatives.rds")
 
@@ -331,12 +325,12 @@ nrow(gamOutputs)
 #drop those whose siloutte width was negative
 gamOutputs <- gamOutputs %>%
   filter(sil_width >0.05)
-nrow(gamOutputs)#loose 15%
+nrow(gamOutputs)#lose 9%
 
 tapply(gamOutputs$sil_width, gamOutputs$cluster, mean)
 tapply(gamOutputs$sil_width, gamOutputs$cluster, min)
 #1         2         3         4 
-#0.3382692 0.7061721 0.3314556 0.3524694
+#0.5717501 0.4168141 0.6368796 0.3519009
 
 #species within
 gamOutputs %>%
@@ -349,12 +343,6 @@ gamOutputs %>%
   facet_wrap(~cluster)
 
 gamOutputs %>%
-  ggplot()+
-  geom_line(aes(x = decidForest, y = preds, groups = Species, colour=factor(cluster)))+
-  xlab("Decid forest cover %") + ylab("Occupancy")+
-  facet_wrap(~Taxa, scales="free")
-
-gamOutputs %>%
   filter(Taxa %in% sort(unique(gamOutputs$Taxa))[1:5]) %>%
   ggplot()+
   geom_line(aes(x = decidForest, y = preds, groups = Species))+
@@ -363,13 +351,7 @@ gamOutputs %>%
 
 #mean per cluster
 (fig1b <- gamOutputs %>%
-  mutate(cluster = case_when(cluster==1 ~ 'prefer open',
-                             cluster==2 ~ 'weak preference',
-                             cluster==3 ~ 'prefer forest',
-                             cluster==4 ~ 'prefer intermediate')) %>%
-  mutate(cluster = factor(cluster, 
-                          levels=c("prefer forest","prefer intermediate","weak preference",
-                                   "prefer open"))) %>%
+  mutate(cluster = reLabel(cluster)) %>%
   group_by(cluster,decidForest, Taxa) %>%
   summarise(preds = median(preds)) %>%
   ggplot()+
@@ -385,13 +367,7 @@ ggsave("plots/clustering_all_deriv_means.png")
   group_by(Taxa, cluster) %>%
   summarise(nuSpecies = length(unique(Species))) %>%
   ungroup() %>%
-    mutate(cluster = case_when(cluster==1 ~ 'prefer open',
-                               cluster==2 ~ 'weak preference',
-                               cluster==3 ~ 'prefer forest',
-                               cluster==4 ~ 'prefer intermediate')) %>%
-    mutate(cluster = factor(cluster, 
-                            levels=c("prefer forest","prefer intermediate","weak preference",
-                                     "prefer open"))) %>%
+  mutate(cluster = reLabel(cluster)) %>%
   ggplot() +
   geom_col(aes(x=Taxa, y = nuSpecies, fill = cluster)) +
   ylab("Number of species") +

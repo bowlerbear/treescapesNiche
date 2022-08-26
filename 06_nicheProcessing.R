@@ -13,6 +13,10 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflie
 
 #check whether to exclude: Aquatic bugs, Cranefiles, E&D
 
+### useful functions ###################
+
+source("00_functions.R")
+
 ### choose models ###########################
 
 modelFolder <- "outputs/forestAssociations/broadleaf_subsample3"
@@ -100,8 +104,8 @@ taxaSummary <- gamOutputs %>%
 gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
 
 gamOutputs %>%
-  #filter(estimate>(-0.1)) %>%
-  filter(std_error<0.05) %>%
+  filter(abs(estimate) < outlierValue(abs(gamOutputs$estimate))) %>%
+  filter(std_error < outlierValue(std_error)) %>%
   ggplot() +
   geom_density_ridges(aes(x = estimate, y = Taxa, fill=Taxa),
                       rel_min_height = 0.001) +
@@ -158,8 +162,8 @@ gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
 
 #plotting
 fig1a <- gamOutputs %>%
-  filter(abs(estimate) < 0.1) %>%
-  filter(std_error < 0.1) %>%
+  filter(abs(estimate) < outlierValue(abs(estimate))) %>%
+  filter(std_error < outlierValue((std_error))) %>%
   ggplot() +
   geom_density_ridges(aes(x = estimate, y = Taxa, fill=Taxa),
                       rel_min_height = 0.001) +
@@ -307,6 +311,16 @@ ggplot(allGams) +
 
 #mostly correlated
 
+### discrete classification ######################################
+
+gamOutputs <- readRDS("outputs/forestAssociations/broadleafAssocations_mixed_linear.rds")
+
+#add on trend classification
+gamOutputs$Trend <- ifelse(gamOutputs$estimate>0 & gamOutputs$pr_t<0.05, "positive",
+                           ifelse(gamOutputs$estimate<0 & gamOutputs$pr_t<0.05, "negative",
+                                  "none"))
+table(gamOutputs$Trend)
+
 ### forest special 1 ##############################################
 
 #based on continous forest associations
@@ -322,10 +336,6 @@ allGams$estimate_conifS <- ifelse(allGams$estimate_conif<0,0.0001,
 allGams$ForestSpecial <- log(allGams$estimate_broadleafS/allGams$estimate_conifS)
 
 summary(allGams$ForestSpecial)
-
-subset(allGams, ForestSpecial >6)
-
-subset(allGams, ForestSpecial < (-38))
 
 allGams %>%
   saveRDS(., file="outputs/forestAssociations/forestSpecial_mixed_linear.rds")
