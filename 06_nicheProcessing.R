@@ -19,9 +19,9 @@ source("00_functions.R")
 
 ### choose models ###########################
 
-modelFolder <- "outputs/forestAssociations/broadleaf_subsample3"
+modelFolder <- "outputs/forestAssociations/broadleaf"
 
-modelFolder <- "outputs/forestAssociations/conif_subsample3"
+modelFolder <- "outputs/forestAssociations/conif"
 
 ### species per taxa ########################
 
@@ -30,7 +30,7 @@ list.files(modelFolder,full.names=TRUE) %>%
   set_names() %>%
   map_dfr(readRDS, .id="source") %>%
   group_by(source) %>%
-  mutate(Taxa = strsplit(source,"_")[[1]][7]) %>%
+  mutate(Taxa = strsplit(source,"_")[[1]][6]) %>%
   ungroup() %>%
   filter(Taxa %in% selectTaxa) %>%
   group_by(Taxa) %>%
@@ -147,6 +147,8 @@ gamOutputs <- getModels(modelFolder,modeltype = "mixed_linear")
 
 saveRDS(gamOutputs, file="outputs/forestAssociations/broadleafAssocations_mixed_linear.rds")
 
+saveRDS(gamOutputs, file="outputs/forestAssociations/conifAssocations_mixed_linear.rds")
+
 #what taxa do we have?
 sort(unique(gamOutputs$Taxa))#all present for broadleaf
 sort(unique(gamOutputs$Taxa))#all present for conif
@@ -203,6 +205,52 @@ gamOutputs %>%
   xlab("Conif forest cover %") + ylab("Occupancy")+
   theme_classic()
 
+### discrete classification ######################################
+
+#deciduous
+gamOutputs <- readRDS("outputs/forestAssociations/broadleafAssocations_mixed_linear.rds")
+
+#add on trend classification
+gamOutputs$Trend <- ifelse(gamOutputs$estimate>0 & gamOutputs$pr_t<0.05, "positive",
+                           ifelse(gamOutputs$estimate<0 & gamOutputs$pr_t<0.05, "negative",
+                                  "none"))
+#overall
+table(gamOutputs$Trend)
+#negative     none positive 
+#478      722      449 
+
+#split by taxa
+gamOutputs %>%
+  group_by(Taxa, Trend) %>%
+  count() %>%
+  group_by(Taxa) %>%
+  mutate(total = sum(n),
+         prop = n/total) %>%
+  filter(Trend=="positive") %>%
+  arrange(desc(prop))
+
+#coniferous
+gamOutputs <- readRDS("outputs/forestAssociations/conifAssocations_mixed_linear.rds")
+
+#add on trend classification
+gamOutputs$Trend <- ifelse(gamOutputs$estimate>0 & gamOutputs$pr_t<0.05, "positive",
+                           ifelse(gamOutputs$estimate<0 & gamOutputs$pr_t<0.05, "negative",
+                                  "none"))
+#overall
+table(gamOutputs$Trend)
+#negative     none positive 
+#342      983      328 
+
+#split by taxa
+gamOutputs %>%
+  group_by(Taxa, Trend) %>%
+  count() %>%
+  group_by(Taxa) %>%
+  mutate(total = sum(n),
+         prop = n/total) %>%
+  filter(Trend=="positive") %>%
+  arrange(desc(prop))
+
 ### compare gam vs gamm models #################################################
 
 #compare model with and without year as a random effect
@@ -231,16 +279,16 @@ gamOutputs_subset1 <- getModels(modelFolder = "outputs/forestAssociations/broadl
                         add_column(subset = "subset1")
 
 nrow(gamOutputs_subset1)
-#2114
+#1649
 
-gamOutputs_subset3 <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample3",
+gamOutputs_subset2 <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample2",
                                   modeltype = "mixed_linear") %>%
-                        add_column(subset = "subset3")
+                        add_column(subset = "subset2")
 
 nrow(gamOutputs_subset3)
-#2506
+#1815
 
-allGams <- bind_rows(gamOutputs_subset1, gamOutputs_subset3) %>%
+allGams <- bind_rows(gamOutputs_subset1, gamOutputs_subset2) %>%
   dplyr::select(subset, species, Taxa, modeltype, estimate, std_error) %>%
   pivot_wider(everything(),
               names_from="subset", 
@@ -249,7 +297,7 @@ allGams <- bind_rows(gamOutputs_subset1, gamOutputs_subset3) %>%
   filter(complete.cases(.))
 
 ggplot(allGams) +
-  geom_point(aes(x = estimate_subset1, y = estimate_subset3)) +
+  geom_point(aes(x = estimate_subset1, y = estimate_subset2)) +
   facet_wrap(~taxa, scales="free") +
   geom_abline(aes(intercept = 0, slope = 1),linetype = "dashed") +
   geom_hline(yintercept=0)+
@@ -257,7 +305,7 @@ ggplot(allGams) +
   xlab("Subset1 Association") + ylab("Subset3 Association")
 
 ggplot(allGams) +
-  geom_point(aes(x = std_error_subset1, y = std_error_subset3)) +
+  geom_point(aes(x = std_error_subset1, y = std_error_subset2)) +
   facet_wrap(~taxa, scales="free") +
   geom_abline(aes(intercept = 0, slope = 1),linetype = "dashed") +
   geom_hline(yintercept=0)+
@@ -267,24 +315,25 @@ ggplot(allGams) +
 
 allGams %>%
   group_by(taxa) %>%
-  summarise(corr = cor(estimate_subset1, estimate_subset3),
-            error_diff = median(std_error_subset1 - std_error_subset3)) %>%
+  summarise(corr = cor(estimate_subset1, estimate_subset2)) %>%
   ungroup()
 
-median(allGams$std_error_subset1)
-median(allGams$std_error_subset3)#lower
 
 ### compare decid vs conif #######################################
 
-gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample3",
+gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
                                   modeltype = "mixed_linear") %>%
-                                  add_column(forest = "broadleaf")
+                                  add_column(forest = "broadleaf") %>%
+                                  group_by(Taxa) %>%
+                                  filter(abs(estimate) < abs(outlierValue(estimate))) %>%
+                                  ungroup()
 
-
-gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif_subsample3",
+gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
                               modeltype = "mixed_linear") %>%
-                              add_column(forest = "conif")
-
+                              add_column(forest = "conif") %>%
+                              group_by(Taxa) %>%
+                              filter(abs(estimate) < abs(outlierValue(estimate))) %>%
+                              ungroup()
 
 allGams <- bind_rows(gamOutputs_broadleaf,gamOutputs_conif) %>%
   dplyr::select(forest, species, Taxa, modeltype, estimate, std_error) %>%
@@ -309,17 +358,14 @@ ggplot(allGams) +
   geom_hline(yintercept=0)+
   geom_vline(xintercept=0)
 
-#mostly correlated
+#quantify the strength of correlations
+temp <- allGams %>%
+  group_by(taxa) %>%
+  summarise(corr = cor(estimate_broadleaf, estimate_conif, 
+                       use="pairwise.complete.obs")) %>%
+  arrange(desc(corr))
 
-### discrete classification ######################################
-
-gamOutputs <- readRDS("outputs/forestAssociations/broadleafAssocations_mixed_linear.rds")
-
-#add on trend classification
-gamOutputs$Trend <- ifelse(gamOutputs$estimate>0 & gamOutputs$pr_t<0.05, "positive",
-                           ifelse(gamOutputs$estimate<0 & gamOutputs$pr_t<0.05, "negative",
-                                  "none"))
-table(gamOutputs$Trend)
+summary(temp$corr)
 
 ### forest special 1 ##############################################
 
