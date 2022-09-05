@@ -91,7 +91,7 @@ ggplot(aes(x=Taxa, y = median_change))+
   geom_hline(yintercept=0, linetype="dashed")+
   coord_flip()
 
-#### testing ##########################
+##### testing ##########################
 
 summary(treeDF$mean_change)
 
@@ -123,7 +123,7 @@ g2 <- treeDF %>%
   coord_flip()
 
 
-#### testing ##########################
+##### testing ##########################
 
 summary(treeDF$mean_change)
 
