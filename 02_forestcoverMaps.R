@@ -4,13 +4,12 @@ library(stars)
 library (rgdal)
 library (RSQLite)
 library(BRCmap)
+library(tmap)
 
 # get ordnance survey grid
 gridDir <- "C:/Users/diabow/OneDrive - UKCEH/Projects/General/OS-British-National-Grids-main"
 ogrListLayers(paste(gridDir,"os_bng_grids.gpkg",sep="/"))
 grid1km <- st_read(paste(gridDir,"os_bng_grids.gpkg",sep="/"), layer='1km_grid')
-
-# get forest cover
 
 ### broadleaf forest ##########################################################
 
@@ -60,7 +59,7 @@ lcMap <- raster(filePath, band=1) # band 1 is deciduous forest cover
 #year <- "_1990_2015"
 
 
-### mask #######################################################################
+#### mask #######################################################################
 
 # change value outside of great britain extent to zero
 plot(lcMap)
@@ -79,7 +78,7 @@ output <- aggregate(st_as_stars(lcMap), grid1km, FUN = mean, na.rm=T)
 output <- st_as_sf(output)
 saveRDS(output,paste0("inputs/decidForest_",year,".rds"))
 
-### add all to the grid ########################################################
+#### add all to the grid ########################################################
 
 allyears <- list.files("inputs", full.names = TRUE) %>%
               str_subset("decidForest_") %>%
@@ -129,7 +128,7 @@ filePath <-  paste0(temp, "/",
 
 lcMap <- raster(filePath, band=2) # band 1 is deciduous forest cover, 2 is conif
 
-### mask #######################################################################
+#### mask #######################################################################
 
 # change value outside of great britain extent to zero
 plot(lcMap)
@@ -148,7 +147,7 @@ output <- aggregate(st_as_stars(lcMap), grid1km, FUN = mean, na.rm=T)
 output <- st_as_sf(output)
 saveRDS(output,paste0("inputs/conifForest_",year,".rds"))
 
-### add all to the grid ########################################################
+#### add all to the grid ########################################################
 
 allyears <- list.files("inputs", full.names = TRUE) %>%
   str_subset("conifForest_") %>%
@@ -164,6 +163,58 @@ allyears <- list.files("inputs", full.names = TRUE) %>%
 names(allyears)[1:4] <- c("fc_1990","fc_2000","fc_2007","fc_2015")
 
 saveRDS(allyears,"inputs/grid1km_conifForest_allyears.rds")          
+
+### plotting #############################################################
+
+GBR <- UK_countries %>%
+  st_as_sf() %>%
+  filter(REGION %in% c("Great Britain")) %>%
+  st_transform(crs = 27700) %>%
+  bind_rows() %>%
+  st_union()
+
+#### forest cover change #####
+
+fcLoss <- list.files("C:/Users/diabow/OneDrive - UKCEH/Projects/Treescapes/data/LandCoverMaps/lcm_1990_2015/data",
+                       full.names = TRUE) %>%
+                        terra::rast(.,lyrs=4) %>%
+                        terra::app(., fun = function(x) ifelse(x==1,1,0)) %>%
+                        aggregate(., fact=10, fun=mean)
+                        
+
+fcGain <- list.files("C:/Users/diabow/OneDrive - UKCEH/Projects/Treescapes/data/LandCoverMaps/lcm_1990_2015/data",
+                     full.names = TRUE) %>%
+                      terra::rast(.,lyrs=5) %>%
+                      terra::app(., fun = function(x) ifelse(x==1,1,0)) %>%
+                      aggregate(., fact=10, fun=mean)
+
+t1 <- tm_shape(fcLoss) +
+  tm_raster(title="% Woodland loss", col="values", palette="Greys", style="cont") +
+  tm_shape(GBR) +
+  tm_borders()
+
+t2 <- tm_shape(fcGain) +
+  tm_raster(title="% Woodland gain", col="values", palette="Greys", style="cont") +
+  tm_shape(GBR) +
+  tm_borders()
+
+tmap_arrange(t1,t2)
+
+#### biodiversity records ######
+
+#run HPC_forestNiche_broadleaf for moths to get visit data
+
+gridSummary <- visit_data %>%
+                group_by(SiteID) %>%
+                summarise(nuVisits = length(unique(visit))) %>%
+                ungroup()
+
+grid1km$nuVisits <- gridSummary$nuVisits[match(grid1km$tile_name,
+                                               gridSummary$SiteID)]
+grid1km$nuVisits[is.na(grid1km$nuVisits)] <- 0
+
+tm_shape(grid1km) +
+  tm_fill("nuVisits") 
 
 ### other data #############################################################
 
