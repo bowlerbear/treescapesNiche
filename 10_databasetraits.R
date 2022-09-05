@@ -56,7 +56,7 @@ indexFile <- read_csv(paste(indexDir,"species-index.csv",sep="/")) %>%
   mutate(species = tolower(species)) 
 
 #what species are missing from this database
-mean(unique(spTrends$species) %in% indexFile$species) # #77% of species
+mean(unique(spTrends$species) %in% indexFile$species) # #75% of species
 
 #missingness across taxa
 taxaData <- unique(spTrends[,c("species","Taxa")])
@@ -76,6 +76,8 @@ table(spTrends$broad_biotope)
 
 #how much data is there?
 mean(!is.na(spTrends$broad_biotope))
+
+mean(grepl("tree-associated", spTrends$broad_biotope[!is.na(spTrends$broad_biotope)]))
 
 #broad classification
 treeDF <- spTrends %>%
@@ -103,6 +105,10 @@ table(spTrends$habitat)
 
 #how much data is there?
 mean(!is.na(spTrends$habitat))
+
+mean(grepl("arboreal", spTrends$habitat[!is.na(spTrends$habitat)]))
+mean(grepl("decaying wood", spTrends$habitat[!is.na(spTrends$habitat)]))
+mean(grepl("shaded woodland floor", spTrends$habitat[!is.na(spTrends$habitat)]))
 
 treeDF <- spTrends %>%
   filter(habitat %in% c("arboreal","decaying wood","shaded woodland floor"))
