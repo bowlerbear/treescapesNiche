@@ -19,9 +19,9 @@ source("00_functions.R")
 
 ### choose models ###########################
 
-modelFolder <- "outputs/forestAssociations/broadleaf"
+modelFolder <- "outputs/forestAssociations/broadleaf_subsample2"
 
-modelFolder <- "outputs/forestAssociations/conif"
+modelFolder <- "outputs/forestAssociations/conif_subsample2"
 
 ### species per taxa ########################
 
@@ -37,109 +37,60 @@ list.files(modelFolder,full.names=TRUE) %>%
   summarise(nuSpecies = length(species)) %>%
   arrange(nuSpecies)
 
-### get models #############################
-
-#function to process a set of models
-
-getModels <- function(modelFolder,modeltype = "simple_linear"){ 
-  
-  #translate
-  if(modeltype=="simple_linear"){
-    fileName <- "gamOutput_glm_subset_random_"
-    
-  } else if(modeltype=="simple_shape"){
-    fileName <- "gamOutput_gam_shape_subset_random_"
-    
-  }else if(modeltype=="mixed_linear"){
-    fileName <- "gamOutput_gamm_subset_random_"
-    
-  }else if(modeltype=="mixed_shape"){
-    fileName <- "gamOutput_gamm_shape_subset_random_"
-  }
-  
-  temp <- list.files(modelFolder,full.names=TRUE) %>%
-    str_subset(fileName) %>%
-    set_names() %>%
-    map_dfr(readRDS, .id="source") %>%
-    group_by(source) %>%
-    mutate(Taxa = strsplit(source, fileName)[[1]][2]) %>%
-    mutate(Taxa = gsub("conif_","",Taxa)) %>%
-    mutate(Taxa = gsub("decid_","",Taxa)) %>%
-    mutate(Taxa = strsplit(Taxa,"_")[[1]][1])%>%
-    ungroup() %>%
-    filter(Taxa %in% selectTaxa) %>%
-    mutate(Taxa = case_when(Taxa=="E&D" ~ "Empidids",
-                          TRUE ~ as.character(Taxa)))  %>%
-    add_column(modeltype = modeltype)
-  
-  #fix names
-  
-  if("Species" %in% names(temp)){
-    temp <- temp %>% rename(Species = species)
-  }
-  
-  if("decid_forest" %in% names(temp)){
-    temp <- temp %>% rename(decidForest = decid_forest)
-    
-  }
-  
-  return(temp)
-}
-
 ### linear #####################
 
-gamOutputs <- getModels(modelFolder,modeltype = "simple_linear")
-          
-saveRDS(gamOutputs, file="outputs/broadleafAssocations_simple_linear.rds")
-
-#what taxa do we have?
-sort(unique(gamOutputs$Taxa))#all taxa
-
-#order taxa by median preferece
-taxaSummary <- gamOutputs %>%
-                group_by(Taxa) %>%
-                summarise(medEffect = median(estimate)) %>%
-                ungroup() %>%
-                arrange(desc(medEffect))
-gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
-
-gamOutputs %>%
-  filter(abs(estimate) < outlierValue(abs(gamOutputs$estimate))) %>%
-  filter(std_error < outlierValue(std_error)) %>%
-  ggplot() +
-  geom_density_ridges(aes(x = estimate, y = Taxa, fill=Taxa),
-                      rel_min_height = 0.001) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  theme(legend.position = "none") +
-  xlab("Association with forest cover")
+# gamOutputs <- getModels(modelFolder,modeltype = "simple_linear")
+#           
+# saveRDS(gamOutputs, file="outputs/broadleafAssocations_simple_linear.rds")
+# 
+# #what taxa do we have?
+# sort(unique(gamOutputs$Taxa))#all taxa
+# 
+# #order taxa by median preferece
+# taxaSummary <- gamOutputs %>%
+#                 group_by(Taxa) %>%
+#                 summarise(medEffect = median(estimate)) %>%
+#                 ungroup() %>%
+#                 arrange(desc(medEffect))
+# gamOutputs$Taxa <- factor(gamOutputs$Taxa, levels=taxaSummary$Taxa)
+# 
+# gamOutputs %>%
+#   filter(abs(estimate) < outlierValue(abs(gamOutputs$estimate))) %>%
+#   filter(std_error < outlierValue(std_error)) %>%
+#   ggplot() +
+#   geom_density_ridges(aes(x = estimate, y = Taxa, fill=Taxa),
+#                       rel_min_height = 0.001) +
+#   geom_vline(xintercept = 0, linetype = "dashed") +
+#   theme(legend.position = "none") +
+#   xlab("Association with forest cover")
 
 ### gam shape ##########################################
 
-gamOutputs <- getModels(modelFolder,modeltype = "simple_shape")
-
-#what taxa do we have?
-sort(unique(gamOutputs$Taxa))#all!!
-
-speciesMax <- gamOutputs %>%
-  group_by(Species) %>%
-  summarise(maxPred = max(preds)) %>%
-  ungroup()
-
-#for broad leaf
-gamOutputs %>%
-ggplot()+
-  geom_line(aes(x=decidForest, y=preds, group=Species))+
-  facet_wrap(~Taxa)+
-  xlab("Decid forest cover %") + ylab("Occupancy")+
-  theme_classic()
-
-#for coniferous
-gamOutputs %>%
-  ggplot()+
-  geom_line(aes(x=conifForest, y=preds, group=Species))+
-  facet_wrap(~Taxa)+
-  xlab("Conif forest cover %") + ylab("Occupancy")+
-  theme_classic()
+# gamOutputs <- getModels(modelFolder,modeltype = "simple_shape")
+# 
+# #what taxa do we have?
+# sort(unique(gamOutputs$Taxa))#all!!
+# 
+# speciesMax <- gamOutputs %>%
+#   group_by(Species) %>%
+#   summarise(maxPred = max(preds)) %>%
+#   ungroup()
+# 
+# #for broad leaf
+# gamOutputs %>%
+# ggplot()+
+#   geom_line(aes(x=decidForest, y=preds, group=Species))+
+#   facet_wrap(~Taxa)+
+#   xlab("Decid forest cover %") + ylab("Occupancy")+
+#   theme_classic()
+# 
+# #for coniferous
+# gamOutputs %>%
+#   ggplot()+
+#   geom_line(aes(x=conifForest, y=preds, group=Species))+
+#   facet_wrap(~Taxa)+
+#   xlab("Conif forest cover %") + ylab("Occupancy")+
+#   theme_classic()
 
 ### linear/gamm ##################################################
 
@@ -204,6 +155,22 @@ gamOutputs %>%
   facet_wrap(~Taxa)+
   xlab("Conif forest cover %") + ylab("Occupancy")+
   theme_classic()
+
+#for each species, get forest cover at which occupancy is maximised
+speciesOptimums <- gamOutputs %>%
+                      group_by(species, Taxa) %>%
+                      summarise(maxForest = decidForest[which.max(preds)]) %>%
+                      ungroup()
+summary(speciesOptimums$maxForest)
+hist(speciesOptimums$maxForest)
+
+#number of species with optimum at zero
+mean(speciesOptimums$maxForest==0)#42
+#at 100%
+mean(speciesOptimums$maxForest==100)#37
+#somewhere in between
+mean(speciesOptimums$maxForest>0 & speciesOptimums$maxForest<100)
+saveRDS(speciesOptimums, file="outputs/forestAssociations/broadleafAssocations_optimums.rds")
 
 ### discrete classification ######################################
 
