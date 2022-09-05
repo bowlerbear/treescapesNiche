@@ -43,7 +43,7 @@ table(spTrends$Taxa)
 
 spTrends$Species <- speciesNames$NAME[match(spTrends$CONCEPT, speciesNames$CONCEPT)]
 
-#for species still blank use original name
+#for species still blank, use original name
 spTrends$Species[is.na(spTrends$Species)] <- spTrends$CONCEPT[is.na(spTrends$Species)]
 
 spTrends$species <- tolower(spTrends$Species)
