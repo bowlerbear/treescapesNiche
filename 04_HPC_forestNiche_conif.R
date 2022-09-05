@@ -136,26 +136,26 @@ taxa_data$visit <- paste(taxa_data$TO_GRIDREF,taxa_data$TO_STARTDATE,sep="_")
 #option 1: simple subsample
 # we dont need tonnes of data to estimate forest preference, so cap to 20000 visits
 
-#but reduce sampling at sites with many visits in the same year
-taxa_data <- taxa_data %>%
-  group_by(TO_GRIDREF, X, Y, YEAR) %>%
-  sample_n(size = ifelse(length(visit)>3,3,length(visit))) %>%
-  ungroup()
-
-#downsample the rest
-nuVisits <- length(unique(taxa_data$visit))
-message(paste('Number of unique visits:', nuVisits))
-
-if(nuVisits>20000){
-  selectVisits <- sample(unique(taxa_data$visit), size = 20000)
-  taxa_data <- taxa_data %>% filter(visit %in% selectVisits)
-}
+# #but reduce sampling at sites with many visits in the same year
+# taxa_data <- taxa_data %>%
+#   group_by(TO_GRIDREF, X, Y, YEAR) %>%
+#   sample_n(size = ifelse(length(visit)>3,3,length(visit))) %>%
+#   ungroup()
+# 
+# #downsample the rest
+# nuVisits <- length(unique(taxa_data$visit))
+# message(paste('Number of unique visits:', nuVisits))
+# 
+# if(nuVisits>20000){
+#   selectVisits <- sample(unique(taxa_data$visit), size = 20000)
+#   taxa_data <- taxa_data %>% filter(visit %in% selectVisits)
+# }
 
 #option 2: undersample well-sampled grids - one visit per grid
-# taxa_data <- taxa_data %>%
-#                 group_by(TO_GRIDREF) %>%
-#                 filter(visit == sample(visit,1)) %>%
-#                 ungroup()
+taxa_data <- taxa_data %>%
+                 group_by(TO_GRIDREF, YEAR) %>%
+                 filter(visit == sample(visit,1)) %>%
+                 ungroup()
 
 ### organize data into visits #######################
 
@@ -393,80 +393,80 @@ lapply_with_error <- function(X,FUN,...){
 
 ### basic gamm ###########################################
 
-# fitGammNiche <- function(myspecies){
-# 
-#   #check all aligns and add in species
-#   all(row.names(occMatrix) == visit_data$visitID)
-#   visit_data$Species <- occMatrix[,myspecies]
-# 
-#   #for subsample option 3
-#   #visit_data <- subsampleData(visit_data)  
-#   
-#   #fit gam and pull out forest cover effect
-#   require(mgcv)
-#   gamm1 <- gamm(Species ~ conifForest + LL + s(yday, k=6) + s(X,Y),
-#                  family = "binomial",
-#                 random = list(Year=~1),
-#                  data = visit_data)
-# 
-#   as.data.frame(t(summary(gamm1$gam)$p.table[2,])) %>%
-#     add_column(Species = myspecies)
-# 
-# }
-# 
-# #apply function
-# gamOutput <- lapply_with_error(commonSpecies,fitGammNiche) %>%
-#                             bind_rows() %>% janitor::clean_names()
-# 
-# 
-# saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_subset_random_conif_",mytaxa,".rds"))
-# 
-# message('Gamm done')
-
-### gamm niche ###########################################
-
 fitGammNiche <- function(myspecies){
-  
+
   #check all aligns and add in species
   all(row.names(occMatrix) == visit_data$visitID)
   visit_data$Species <- occMatrix[,myspecies]
-  
+
   #for subsample option 3
   #visit_data <- subsampleData(visit_data)
-  
+
   #fit gam and pull out forest cover effect
   require(mgcv)
-  gamm1 <- gamm(Species ~ s(conifForest, k=5) + LL +  s(yday, k=10) + s(X,Y),
+  gamm1 <- gamm(Species ~ conifForest + LL + s(yday) + s(X,Y),
+                 family = "binomial",
                 random = list(Year=~1),
-                family = "binomial",
-                data = visit_data)
-  
-  #predict the gam effect of forest cover
-  newdata = data.frame(conifForest = seq(0,100,by=1),
-                       yday = median(visit_data$yday),
-                       yday2 = median(visit_data$yday2),
-                       X = median(visit_data$X),
-                       Y = median(visit_data$Y),
-                       LL = "short",
-                       Year = median(visit_data$Year))
-  
-  newdata$preds <- predict(gamm1$gam, newdata, type="response")
-  newdata$preds_se <- predict(gamm1$gam, newdata, se.fit=TRUE, type="response")$se.fit
-  newdata$Species <- myspecies
-  newdata$maxForest <- max(visit_data$conifForest)
-  #qplot(decidForest,preds,data=newdata)
-  
-  return(newdata)
-  
+                 data = visit_data)
+
+  as.data.frame(t(summary(gamm1$gam)$p.table[2,])) %>%
+    add_column(Species = myspecies)
+
 }
 
 #apply function
 gamOutput <- lapply_with_error(commonSpecies,fitGammNiche) %>%
-  bind_rows() %>% janitor::clean_names()
+                            bind_rows() %>% janitor::clean_names()
 
-saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_shape_subset_random_conif_",mytaxa,".rds"))
 
-message('Gamm shape done')
+saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_subset_random_conif_",mytaxa,".rds"))
+
+message('Gamm done')
+
+### gamm niche ###########################################
+
+# fitGammNiche <- function(myspecies){
+#   
+#   #check all aligns and add in species
+#   all(row.names(occMatrix) == visit_data$visitID)
+#   visit_data$Species <- occMatrix[,myspecies]
+#   
+#   #for subsample option 3
+#   #visit_data <- subsampleData(visit_data)
+#   
+#   #fit gam and pull out forest cover effect
+#   require(mgcv)
+#   gamm1 <- gamm(Species ~ s(conifForest, k=5) + LL +  s(yday, k=10) + s(X,Y),
+#                 random = list(Year=~1),
+#                 family = "binomial",
+#                 data = visit_data)
+#   
+#   #predict the gam effect of forest cover
+#   newdata = data.frame(conifForest = seq(0,100,by=1),
+#                        yday = median(visit_data$yday),
+#                        yday2 = median(visit_data$yday2),
+#                        X = median(visit_data$X),
+#                        Y = median(visit_data$Y),
+#                        LL = "short",
+#                        Year = median(visit_data$Year))
+#   
+#   newdata$preds <- predict(gamm1$gam, newdata, type="response")
+#   newdata$preds_se <- predict(gamm1$gam, newdata, se.fit=TRUE, type="response")$se.fit
+#   newdata$Species <- myspecies
+#   newdata$maxForest <- max(visit_data$conifForest)
+#   #qplot(decidForest,preds,data=newdata)
+#   
+#   return(newdata)
+#   
+# }
+# 
+# #apply function
+# gamOutput <- lapply_with_error(commonSpecies,fitGammNiche) %>%
+#   bind_rows() %>% janitor::clean_names()
+# 
+# saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_shape_subset_random_conif_",mytaxa,".rds"))
+# 
+# message('Gamm shape done')
 
 ### gam derivatives #####################################
 
