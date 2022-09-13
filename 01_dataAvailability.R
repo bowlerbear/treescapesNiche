@@ -44,6 +44,7 @@ lapply(allFiles, function(x){
 
 allData <- list.files(dataDir, pattern = ".rdata") %>%
             str_subset("Plants",negate=TRUE) %>%
+            str_subset("Cleaned") %>%
             lapply(.,function(x){
               get(load(paste(dataDir,x,sep="/"))) %>%
                 mutate(File = x)}) 
