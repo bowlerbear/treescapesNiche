@@ -157,11 +157,11 @@ if(grepl("Moths", mytaxa)){
 #   taxa_data <- taxa_data %>% filter(visit %in% selectVisits)
 # }
 
-#option 2: undersample well-sampled grids - one visit per grid
-taxa_data <- taxa_data %>%
-                 group_by(TO_GRIDREF, YEAR) %>%
-                 filter(visit == sample(visit,1)) %>%
-                 ungroup()
+# #option 2: undersample well-sampled grids - one visit per grid
+# taxa_data <- taxa_data %>%
+#                  group_by(TO_GRIDREF, YEAR) %>%
+#                  filter(visit == sample(visit,1)) %>%
+#                  ungroup()
 
 ### organize data into visits #######################
 
@@ -201,6 +201,8 @@ speciesSummary <- taxa_data %>%
             nuSites = length(unique(TO_GRIDREF))) %>%
   ungroup() %>%
   arrange(desc(nuRecs))
+
+#saveRDS(speciesSummary, file=paste0("speciesSummary_", mytaxa, ".rds"))
 
 #how many species do we have at least 50 records for
 commonSpecies <- speciesSummary %>%
@@ -319,6 +321,35 @@ if(all(row.names(occMatrix) == visit_data$visitID)){
   message('And occupancy matrix aligns')
 }
 
+### illustrative plot ######################################
+
+# #this is just to include in the figure to show what this analysis generally does
+# 
+# fitGammNiche <- function(myspecies){
+# 
+#   #check all aligns and add in species
+#   visit_data$Species <- occMatrix[,myspecies]
+# 
+#   gamm1 <- glm(Species ~ decidForest,
+#                  family = "binomial",
+#                  data = visit_data)
+# 
+#   #predict the gam effect of forest cover
+#   newdata = data.frame(decidForest = seq(0,100,by=1))
+#   newdata$preds <- predict(gamm1, newdata, type="link")
+#   newdata$Species <- myspecies
+# 
+#   return(newdata)
+# 
+# }
+# 
+# #apply function
+# gamOutput <- lapply_with_error(commonSpecies,fitGammNiche) %>%
+#                 bind_rows() %>% janitor::clean_names()
+# 
+# 
+# saveRDS(gamOutput, file="outputs/gamOutput_illustrative_glm.rds")
+
 ### try application ########################################
 
 lapply_with_error <- function(X,FUN,...){    
@@ -401,79 +432,79 @@ lapply_with_error <- function(X,FUN,...){
 
 ### basic gamm ###########################################
 
-fitGammNiche <- function(myspecies){
-
-  #check all aligns and add in species
-  all(row.names(occMatrix) == visit_data$visitID)
-  visit_data$Species <- occMatrix[,myspecies]
-
-  #for subsample option 3
-  #visit_data <- subsampleData(visit_data)
-
-  #fit gam and pull out forest cover effect
-  require(mgcv)
-  gamm1 <- gamm(Species ~ decidForest + LL + s(yday) + s(X,Y),
-                family = "binomial",
-                random = list(Year=~1),
-                data = visit_data)
-
-  as.data.frame(t(summary(gamm1$gam)$p.table[2,])) %>%
-    add_column(Species = myspecies)
-
-}
-
-#apply function
-gamOutput <- lapply_with_error(commonSpecies,fitGammNiche) %>%
-  bind_rows() %>% janitor::clean_names()
-
-saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_subset_random_decid_",mytaxa,".rds"))
-
-message('Gamm done')
+# fitGammNiche <- function(myspecies){
+# 
+#   #check all aligns and add in species
+#   all(row.names(occMatrix) == visit_data$visitID)
+#   visit_data$Species <- occMatrix[,myspecies]
+# 
+#   #for subsample option 3
+#   #visit_data <- subsampleData(visit_data)
+# 
+#   #fit gam and pull out forest cover effect
+#   require(mgcv)
+#   gamm1 <- gamm(Species ~ decidForest + LL + s(yday) + s(X,Y),
+#                 family = "binomial",
+#                 random = list(Year=~1),
+#                 data = visit_data)
+# 
+#   as.data.frame(t(summary(gamm1$gam)$p.table[2,])) %>%
+#     add_column(Species = myspecies)
+# 
+# }
+# 
+# #apply function
+# gamOutput <- lapply_with_error(commonSpecies,fitGammNiche) %>%
+#   bind_rows() %>% janitor::clean_names()
+# 
+# saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_subset_random_decid_",mytaxa,".rds"))
+# 
+# message('Gamm done')
 
 ### gamm niche ###########################################
 
-fitGammNiche <- function(myspecies){
-
-  #check all aligns and add in species
-  all(row.names(occMatrix) == visit_data$visitID)
-  visit_data$Species <- occMatrix[,myspecies]
-
-  #for subsample option 3
-  #visit_data <- subsampleData(visit_data)
-
-  #fit gam and pull out forest cover effect
-  require(mgcv)
-  gamm1 <- gamm(Species ~ s(decidForest, k=4) + LL +  s(yday) + s(X,Y),
-                 random = list(Year=~1),
-                 family = "binomial",
-                 data = visit_data)
-
-  #predict the gam effect of forest cover
-  newdata = data.frame(decidForest = seq(0,100,by=1),
-                       yday = median(visit_data$yday),
-                       yday2 = median(visit_data$yday2),
-                       X = median(visit_data$X),
-                       Y = median(visit_data$Y),
-                       LL = "short",
-                       Year = median(visit_data$Year))
-
-  newdata$preds <- predict(gamm1$gam, newdata, type="response")
-  newdata$preds_se <- predict(gamm1$gam, newdata, se.fit=TRUE, type="response")$se.fit
-  newdata$Species <- myspecies
-  newdata$maxForest <- max(visit_data$decidForest)
-  #qplot(decidForest,preds,data=newdata)
-
-  return(newdata)
-
-}
-
-#apply function
-gamOutput <- lapply_with_error(commonSpecies,fitGammNiche) %>%
-                bind_rows() %>% janitor::clean_names()
-
-saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_shape_subset_random_decid_",mytaxa,".rds"))
-
-message('Gamm shape done')
+# fitGammNiche <- function(myspecies){
+# 
+#   #check all aligns and add in species
+#   all(row.names(occMatrix) == visit_data$visitID)
+#   visit_data$Species <- occMatrix[,myspecies]
+# 
+#   #for subsample option 3
+#   #visit_data <- subsampleData(visit_data)
+# 
+#   #fit gam and pull out forest cover effect
+#   require(mgcv)
+#   gamm1 <- gamm(Species ~ s(decidForest, k=4) + LL +  s(yday) + s(X,Y),
+#                  random = list(Year=~1),
+#                  family = "binomial",
+#                  data = visit_data)
+# 
+#   #predict the gam effect of forest cover
+#   newdata = data.frame(decidForest = seq(0,100,by=1),
+#                        yday = median(visit_data$yday),
+#                        yday2 = median(visit_data$yday2),
+#                        X = median(visit_data$X),
+#                        Y = median(visit_data$Y),
+#                        LL = "short",
+#                        Year = median(visit_data$Year))
+# 
+#   newdata$preds <- predict(gamm1$gam, newdata, type="response")
+#   newdata$preds_se <- predict(gamm1$gam, newdata, se.fit=TRUE, type="response")$se.fit
+#   newdata$Species <- myspecies
+#   newdata$maxForest <- max(visit_data$decidForest)
+#   #qplot(decidForest,preds,data=newdata)
+# 
+#   return(newdata)
+# 
+# }
+# 
+# #apply function
+# gamOutput <- lapply_with_error(commonSpecies,fitGammNiche) %>%
+#                 bind_rows() %>% janitor::clean_names()
+# 
+# saveRDS(gamOutput,file=paste0(outputDir,"/gamOutput_gamm_shape_subset_random_decid_",mytaxa,".rds"))
+# 
+# message('Gamm shape done')
 
 # ### gam derivatives #####################################
 # 

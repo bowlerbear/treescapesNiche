@@ -10,22 +10,22 @@ selectTaxa <-  c("Ants", "AquaticBugs","Bees","Carabids","Centipedes","Craneflie
 
 # data ######
 
-msiTS <- list.files("outputs/msi_cont", full.names=TRUE) %>%
+msiTS <- list.files("outputs/msi_deriv", full.names=TRUE) %>%
             str_subset("msi_timeseries") %>%
             map_dfr(readRDS) %>%
+            filter(taxon %in% selectTaxa) %>%
             mutate(taxon = case_when(taxon=="E&D" ~ "Empidids",
                                       TRUE ~ as.character(taxon))) 
 
 # labelling #####
 
-msiTS$cluster <- ifelse(msiTS$cluster==1, "positive",
-                        ifelse(msiTS$cluster==2, "negative",
-                        "none"))
+msiTS$cluster <- reLabel(msiTS$cluster)
+table(msiTS$cluster)
 
 # any to remove
 
-msiTS <- msiTS %>%
-          filter(!(taxon=="ShieldBugs" & cluster==3))
+#msiTS <- msiTS %>%
+#          filter(!(taxon=="ShieldBugs" & cluster==3))
 
 # check plot ######
 
@@ -49,12 +49,12 @@ ggplot(msiTS)+
   geom_ribbon(aes(x=year, ymin=lowerCI, ymax=upperCI, fill=cluster),alpha=0.5)+
   facet_wrap(~taxon, scales="free")+
   theme_classic() +
-  scale_colour_brewer("Forest association", palette = "RdYlGn", direction =1) +
-  scale_fill_brewer("Forest association", palette = "RdYlGn", direction =1) +
+  scale_colour_brewer("Broadleaf forest association", palette = "RdYlGn", direction =-1) +
+  scale_fill_brewer("Broadleaf forest association", palette = "RdYlGn", direction =-1) +
   ylab("MSI occupancy") + xlab("Year") +
   theme(legend.position="top")
 
-ggsave("plots/msi_cont_ts.png", width=10,height=7)
+ggsave("plots/msi_deriv_ts.png", width=10,height=7)
 
 # standardardized ###
 
@@ -64,31 +64,38 @@ ggplot(msiTS)+
   geom_ribbon(aes(x=year, ymin=lowerCI_scaled, ymax=upperCI_scaled, fill=cluster),alpha=0.5)+
   facet_wrap(~taxon, scales="free")+
   theme_classic() +
-  scale_colour_brewer("Forest association", palette = "RdYlGn", direction =1) +
-  scale_fill_brewer("Forest association", palette = "RdYlGn", direction =1) +
+  scale_colour_brewer("Broadleaf forest association", palette = "RdYlGn", direction =-1) +
+  scale_fill_brewer("Broadleaf forest association", palette = "RdYlGn", direction =-1) +
   ylab("MSI occupancy") + xlab("Year") +
   theme(legend.position="top")
 
-ggsave("plots/msi_cont_standard_ts.png", width=10,height=7)
+ggsave("plots/msi_deriv_standard_ts.png", width=9.5,height=6.5)
                                                
 # select time series ######
 
 #### ants #####
 
-gamOutputs <- readRDS("outputs/forestAssociations/broadleafAssocations_mixed_linear.rds")
+#groups:
+#based on significance classification
+# temp <- readRDS("outputs/forestAssociations/broadleafAssocations_mixed_linear.rds")
+# temp$Trend <- ifelse(temp$estimate>0 & temp$pr_t<0.05, "positive",
+#                            ifelse(temp$estimate<0 & temp$pr_t<0.05, "negative",
+#                                   "none"))
 
-#add on trend classification
-gamOutputs$Trend <- ifelse(gamOutputs$estimate>0 & gamOutputs$pr_t<0.05, "positive",
-                           ifelse(gamOutputs$estimate<0 & gamOutputs$pr_t<0.05, "negative",
-                                  "none"))
+#based on clusters
+temp <- readRDS("outputs/clustering/deriv_classification_all.rds") %>%
+  janitor::clean_names() %>%
+  mutate(species = tolower(species),
+         cluster = reLabel(cluster))
 
+table(temp$cluster)
+
+#get time series data for each
 antsTS <- readRDS("outputs/antsTS.rds") 
-#[1] "formica fusca"         "formica rufa"          "lasius platythorax"    "leptothorax acervorum"
-#[5] "myrmica ruginodis"
 
 #subset to forest species
 antsTS <- antsTS %>%
-  filter(species %in% tolower(gamOutputs$species)[gamOutputs$Trend=="positive"]) %>%
+  filter(species %in% tolower(temp$species)[temp$cluster %in% c("prefer forest")]) %>%
   mutate(year = as.numeric(gsub("year_", "", year)))
 
 sort(unique(antsTS$species))

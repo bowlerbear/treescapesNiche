@@ -19,9 +19,9 @@ source("00_functions.R")
 
 ### choose models ###########################
 
-modelFolder <- "outputs/forestAssociations/broadleaf_subsample2"
+modelFolder <- "outputs/forestAssociations/broadleaf_subsample3"
 
-modelFolder <- "outputs/forestAssociations/conif_subsample2"
+modelFolder <- "outputs/forestAssociations/conif_subsample3"
 
 ### species per taxa ########################
 
@@ -30,7 +30,7 @@ list.files(modelFolder,full.names=TRUE) %>%
   set_names() %>%
   map_dfr(readRDS, .id="source") %>%
   group_by(source) %>%
-  mutate(Taxa = strsplit(source,"_")[[1]][6]) %>%
+  mutate(Taxa = strsplit(source,"_")[[1]][7]) %>%
   ungroup() %>%
   filter(Taxa %in% selectTaxa) %>%
   group_by(Taxa) %>%
@@ -123,9 +123,35 @@ fig1a <- gamOutputs %>%
   geom_vline(xintercept = 0, linetype = "dashed") +
   theme(legend.position = "none") +
   ylab("Taxa (ordered by median value)") +
-  xlab("Association with forest cover")
+  xlab("Association with broadleaf woodland cover")
 
 saveRDS(fig1a, file="plots/fig1a.rds")
+#saveRDS(fig1a, file="plots/fig1a_coniferous.rds")
+
+#magnitude statistics
+quantile(gamOutputs$estimate)
+length(gamOutputs$estimate)
+
+#positive association per 10% forest cover
+sum(exp(gamOutputs$estimate*10)>1.2)
+subset(gamOutputs, exp(estimate*10)>1.2)$species
+subset(gamOutputs, exp(estimate)>1.02)$species
+
+#median coniferous association
+median(gamOutputs$estimate[gamOutputs$estimate>0])#0.01060032
+median(gamOutputs$estimate[gamOutputs$estimate>0])#0.01234388
+
+### illustrative linear plots ####################################
+
+glmPreds <- readRDS("outputs/gamOutput_illustrative_glm.rds")
+
+fig1b <- ggplot(glmPreds)+
+  geom_line(aes(x=decid_forest, y=preds, colour=species))+
+  xlab("Broadleaf woodland cover %")+
+  ylab("Occupancy probability (logit-scale)")+
+  theme(legend.position = "none")
+
+saveRDS(fig1b, file="plots/fig1b.rds")
 
 ### gam shape/gamm ###############################################
 
@@ -161,16 +187,21 @@ speciesOptimums <- gamOutputs %>%
                       group_by(species, Taxa) %>%
                       summarise(maxForest = decidForest[which.max(preds)]) %>%
                       ungroup()
+
+saveRDS(speciesOptimums, file="outputs/forestAssociations/broadleafAssocations_optimums.rds")
+
 summary(speciesOptimums$maxForest)
 hist(speciesOptimums$maxForest)
 
 #number of species with optimum at zero
-mean(speciesOptimums$maxForest==0)#42
+mean(speciesOptimums$maxForest==0)#49
 #at 100%
 mean(speciesOptimums$maxForest==100)#37
 #somewhere in between
 mean(speciesOptimums$maxForest>0 & speciesOptimums$maxForest<100)
-saveRDS(speciesOptimums, file="outputs/forestAssociations/broadleafAssocations_optimums.rds")
+
+#summary of those in between
+summary(speciesOptimums$maxForest[speciesOptimums$maxForest>0 & speciesOptimums$maxForest<100])
 
 ### discrete classification ######################################
 
@@ -184,7 +215,7 @@ gamOutputs$Trend <- ifelse(gamOutputs$estimate>0 & gamOutputs$pr_t<0.05, "positi
 #overall
 table(gamOutputs$Trend)
 #negative     none positive 
-#478      722      449 
+#891     1365      816
 
 #split by taxa
 gamOutputs %>%
@@ -196,6 +227,15 @@ gamOutputs %>%
   filter(Trend=="positive") %>%
   arrange(desc(prop))
 
+
+#split by taxa and direction of trend
+gamOutputs %>%
+  group_by(Trend) %>%
+  summarise(meanE = median(estimate)) %>%
+  arrange(desc(meanE))
+
+1-exp(0.0168)
+
 #coniferous
 gamOutputs <- readRDS("outputs/forestAssociations/conifAssocations_mixed_linear.rds")
 
@@ -206,7 +246,7 @@ gamOutputs$Trend <- ifelse(gamOutputs$estimate>0 & gamOutputs$pr_t<0.05, "positi
 #overall
 table(gamOutputs$Trend)
 #negative     none positive 
-#342      983      328 
+#652     1845      575
 
 #split by taxa
 gamOutputs %>%
@@ -248,12 +288,12 @@ gamOutputs_subset1 <- getModels(modelFolder = "outputs/forestAssociations/broadl
 nrow(gamOutputs_subset1)
 #1649
 
-gamOutputs_subset2 <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample2",
+gamOutputs_subset2 <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample3",
                                   modeltype = "mixed_linear") %>%
                         add_column(subset = "subset2")
 
-nrow(gamOutputs_subset3)
-#1815
+nrow(gamOutputs_subset2)
+#2181
 
 allGams <- bind_rows(gamOutputs_subset1, gamOutputs_subset2) %>%
   dplyr::select(subset, species, Taxa, modeltype, estimate, std_error) %>%
@@ -288,18 +328,18 @@ allGams %>%
 
 ### compare decid vs conif #######################################
 
-gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf",
+gamOutputs_broadleaf <- getModels(modelFolder = "outputs/forestAssociations/broadleaf_subsample3",
                                   modeltype = "mixed_linear") %>%
                                   add_column(forest = "broadleaf") %>%
                                   group_by(Taxa) %>%
-                                  filter(abs(estimate) < abs(outlierValue(estimate))) %>%
+                                  filter(std_error < outlierValue(std_error)) %>%
                                   ungroup()
 
-gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif",
+gamOutputs_conif <- getModels(modelFolder = "outputs/forestAssociations/conif_subsample3",
                               modeltype = "mixed_linear") %>%
                               add_column(forest = "conif") %>%
                               group_by(Taxa) %>%
-                              filter(abs(estimate) < abs(outlierValue(estimate))) %>%
+                              filter(std_error < outlierValue(std_error)) %>%
                               ungroup()
 
 allGams <- bind_rows(gamOutputs_broadleaf,gamOutputs_conif) %>%
@@ -426,5 +466,22 @@ compareOutput <- inner_join(carabidMods, gamOutputs, by = "species")
 qplot(estimate_occdet, estimate, data=compareOutput)
 #bit different but mostly similar
 cor(compareOutput$estimate_occdet,compareOutput$estimate)
+
+### species summaries ###############################################
+
+output <- list.files("outputs/speciesSummary",full.names=TRUE) %>%
+  set_names() %>%
+  map_dfr(readRDS, .id="source") %>%
+  group_by(source) %>%
+  mutate(Taxa = strsplit(source,"_")[[1]][2]) %>%
+  ungroup() %>%
+  filter(Taxa %in% selectTaxa)
+
+nrow(output)
+
+rareSpecies <- output %>%
+  filter(nuRecs < 50 | nuSites < 20)
+nrow(rareSpecies)
+head(rareSpecies)
 
 ### end ##########################################################

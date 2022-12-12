@@ -1,3 +1,4 @@
+library(metafor)
 library(tidyverse)
 library(ggridges)
 theme_set(theme_classic())
@@ -67,6 +68,35 @@ tapply(taxaData$Present,taxaData$Taxa,mean)
 spTrends <- spTrends %>%
   left_join(.,indexFile, by="species") 
 
+### clusters ##############
+
+clusterDF <- readRDS("outputs/clustering/deriv_classification_all.rds") %>%
+  janitor::clean_names() %>%
+  mutate(CONCEPT = tolower(species)) %>%
+  select(CONCEPT, cluster)
+
+table(clusterDF$cluster)
+
+#merge with trends
+spTrends <- spTrends %>%
+  left_join(., clusterDF) 
+
+### example species ######
+
+spTrends %>%
+  filter(grepl("tree-associated", broad_biotope)) %>%
+  filter(!is.na(cluster)) %>%
+  mutate(cluster = reLabel(cluster)) %>%
+  mutate(direction = ifelse(lowerCI_change>0,"increase",
+                            ifelse(upperCI_change<0,"decrease",
+                                   ifelse(mean_change<0 & upperCI_change>0,"non-sig decrease",
+                                          "non-sig increase")))) %>%
+  filter(direction=="decrease") %>%
+  filter(cluster=="prefer woodland") %>%
+  select(species, direction, cluster, mean_change, habitat, resources) %>%
+  arrange(mean_change)
+
+
 ### habitat vs trends #####
 
 #### biotope ##############
@@ -97,6 +127,8 @@ summary(treeDF$mean_change)
 
 rma.mv(mean_change, sd_change^2, 
        random = ~ 1 | Taxa, data = treeDF)
+#negative but this isnt the difference between open and trees
+#not of interest
 
 #### habitat ##########################
 
@@ -122,7 +154,6 @@ g2 <- treeDF %>%
   geom_hline(yintercept=0, linetype="dashed")+
   coord_flip()
 
-
 ##### testing ##########################
 
 summary(treeDF$mean_change)
@@ -132,6 +163,33 @@ rma.mv(mean_change, sd_change^2, mods=~habitat,
 
 rma.mv(mean_change, sd_change^2, mods=~habitat-1,
        random = ~ 1 | Taxa, data = treeDF)
+
+#                                 estimate      se     zval    pval    ci.lb    ci.ub      
+#habitatarboreal                -0.3806  0.1235  -3.0825  0.0021  -0.6225  -0.1386   ** 
+#habitatdecaying wood           -0.1184  0.1430  -0.8277  0.4078  -0.3987   0.1619      
+#habitatshaded woodland floor   -0.4510  0.1231  -3.6654  0.0002  -0.6922  -0.2099  *** 
+
+# shaded woodland floor (Found in closed canopy woodland and scrub, where it is separated vertically rather than horizontally from arboreal assemblage types. It is associated with low levels of disturbance.)
+#	decaying wood: Decay specifically within a tree's heartwood, which may be subdivided into red-rot or white-rot fungi, having a strong impact on the species composition of the associated invertebrates.
+# arboreal: A habitat in and on trees, including the canopy, trunks and branches.
+
+#### resources ######
+
+treeDF %>% 
+  group_by(resources) %>%
+  summarise(nuSpecies = length(resources)) %>%
+  arrange(desc(nuSpecies))
+
+#https://pantheon.brc.ac.uk/content/tree-associated-biotope
+
+#conifer or broadleaf
+cbDF <- treeDF %>%
+          filter(grepl("conifer or broadleaved", treeDF$resources))
+nrow(cbDF)#771
+
+cbDF <- treeDF %>%
+  filter(grepl("tree species", treeDF$resources))
+nrow(cbDF)#0
 
 ### habitat vs my metric ####
 
@@ -169,10 +227,80 @@ gamOutputs %>%
 
 ### conservation status ####
 
+#### full list ############
+
+conservationSpecies <- list.files("C:/Users/diabow/OneDrive - UKCEH/Projects/General/Protection/conservation-designations-20220202",
+                              pattern='.csv', full.names = TRUE) %>% read.csv() 
+
+#subset to select designations
+selectDesignations <- read.csv("../../data/Select_Designations.csv") %>%
+                        filter(keep=="keep")
+
+conservationSpecies <- conservationSpecies %>%
+                        filter(Designation %in% selectDesignations$ï..Designation_type)
+
+#compile two species name columns
+conservationSpecies <- tolower(unique(c(conservationSpecies$Recommended.taxon.name,
+                         conservationSpecies$Designated.name)))
+
+ 
+#plotting
+conservationSummary <- spTrends %>%
+  #filter(cluster %in% c(2,4)) %>%
+  filter(species %in% conservationSpecies) %>%
+  filter(!is.na(cluster)) %>%
+  mutate(cluster = reLabel(cluster)) %>%
+  mutate(direction = ifelse(lowerCI_change>0,"increase",
+                            ifelse(upperCI_change<0,"decrease",
+                                   ifelse(mean_change<0 & upperCI_change>0,"non-sig decrease",
+                                          "non-sig increase")))) %>%
+  mutate(direction = factor(direction,
+                            levels = c("decrease", "non-sig decrease", 
+                                       "non-sig increase", "increase"))) 
+
+conservationSummary %>%
+  group_by(Taxa, direction, cluster) %>%
+  summarise(nuSpecies = length(unique(species))) %>%
+  ggplot() +
+  geom_col(aes(x=Taxa, y = nuSpecies, fill=direction)) +
+  scale_fill_brewer("Trend", type="div") +
+  ylab("Number of species with a conservation designation") +
+  facet_wrap(~cluster, scales="free_x") +
+  coord_flip() +
+  theme(legend.position="top")
+
+ggsave("plots/conservation_status.png",width=6,height=7)
+
+#summary of proportions
+conservationSummary %>%
+  group_by(direction, cluster) %>%
+  summarise(nuSpecies = length(unique(species))) %>%
+  group_by(direction) %>%
+  mutate(totalNu = sum(nuSpecies)) %>%
+  filter(direction %in% c("decrease", "increase")) %>%
+  mutate(prop = nuSpecies/totalNu)
+
+#chisq
+conservationSummary %>%
+  group_by(direction, cluster) %>%
+  summarise(nuSpecies = length(unique(species))) %>%
+  group_by(direction) %>%
+  mutate(totalNu = sum(nuSpecies)) %>%
+  filter(direction %in% c("decrease", "increase"))
+
+#identify declining forest species
+conservationSummary %>%
+  filter(cluster %in% c("prefer forest", "prefer intermediate")) %>%
+  filter(direction =="increase") %>%
+  arrange(median_change) %>%
+  select(Species, median_change) %>%
+  pull("Species")
+
+#### S41 ###################
+
 #all possible status
 table(spTrends$conservation_status)
 
-#### S41 ###################
 
 #S41 species as a measure of conservation status
 spTrends$S41 <- sapply(spTrends$conservation_status, function(x){
@@ -199,7 +327,7 @@ speciesTreeS41 <- spTrends$species[spTrends$S41==1 & spTrends$broad_biotope=="tr
 
 saveRDS(speciesTreeS41,file="outputs/speciesTreesS41.rds")
 
-#### full list ############
+#### BAP list ############
 
 prioritySpecies <- list.files("C:/Users/diabow/OneDrive - UKCEH/Projects/General/Protection",
                               pattern='.csv', full.names = TRUE) %>%
@@ -233,8 +361,6 @@ spTrends %>%
   scale_fill_brewer("Trend", type="div") +
   ylab("Number of BAP species") +
   coord_flip()
-
-ggsave("plots/conservation_status.png",width=6,height=3)
 
 #### select time series #############################################
 

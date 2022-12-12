@@ -14,7 +14,7 @@ grid1km <- st_read(paste(gridDir,"os_bng_grids.gpkg",sep="/"), layer='1km_grid')
 ### broadleaf forest ##########################################################
 
 # choose year
-year <- 2007
+year <- 2015
 yearPath <- paste0("C:/Users/diabow/OneDrive - UKCEH/Projects/Treescapes/data/LandCoverMaps/lcm")
 ziplocation <- paste(paste0(yearPath, year),list.files(paste0(yearPath, year)), sep="/")
 utils::unzip(ziplocation, list = TRUE)
